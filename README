@@ -22,6 +22,14 @@ Usage
 Times in --start/--end are SS, MM:SS or H:MM:SS. Chart and JSON times always refer to
 the original song, even when only a section is analysed.
 
+Pasting YouTube links
+---------------------
+PowerShell splits an unquoted link at "&". Either quote it, or let chordchart ask:
+    uv run chordchart                  # prompts: link, start, end (Enter = whole song)
+    uv run chordchart --clipboard      # takes the link you just copied
+Full links can be pasted as-is: playlist/radio parameters (&list=, &start_radio=,
+&index=, ...) are ignored and only the video is analysed.
+
 Download cache
 --------------
 Links are downloaded once and reused. Running the same link again needs no network.

@@ -10,7 +10,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from chordchart.download import download
 from chordchart.errors import AudioDecodeError
@@ -18,6 +18,8 @@ from chordchart.fetch import DEFAULT_MAX_DURATION
 
 # "youtube.com/..." or "youtu.be/...": a domain followed by a slash.
 _LOOKS_LIKE_DOMAIN = re.compile(r"^([a-z0-9-]+\.)+[a-z]{2,}/", re.IGNORECASE)
+_YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"}
+_VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 
 @dataclass(frozen=True)
@@ -32,6 +34,29 @@ def is_link(arg: str) -> bool:
     return parsed.scheme in ("http", "https") and bool(parsed.netloc)
 
 
+def normalize_link(url: str) -> str:
+    """Reduce a YouTube link that names a video to just that video.
+
+    `watch?v=ID&list=...&start_radio=1&index=3`, `youtu.be/ID?si=...` and
+    `shorts/ID` all become `https://www.youtube.com/watch?v=ID`. So playlist/radio
+    parameters are ignored, and the same video always hits the same cache entry.
+    Anything else (other sites, playlist-only links) is returned unchanged.
+    """
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    video_id = None
+    if host in _YOUTUBE_HOSTS:
+        if parsed.path == "/watch":
+            video_id = parse_qs(parsed.query).get("v", [None])[0]
+        elif parsed.path.startswith(("/shorts/", "/live/", "/embed/")):
+            video_id = parsed.path.split("/")[2]
+    elif host == "youtu.be":
+        video_id = parsed.path.lstrip("/").split("/")[0]
+    if video_id and _VIDEO_ID.match(video_id):
+        return f"https://www.youtube.com/watch?v={video_id}"
+    return url
+
+
 def resolve_source(
     arg: str,
     *,
@@ -40,8 +65,11 @@ def resolve_source(
     status: Callable[[str], None] | None = None,
 ) -> ResolvedSource:
     if is_link(arg):
-        got = download(arg, max_duration=max_duration, refresh=refresh, status=status)
-        return ResolvedSource(got.path, got.title, arg)
+        link = normalize_link(arg)
+        if link != arg and status:
+            status(f"using the video only: {link}")
+        got = download(link, max_duration=max_duration, refresh=refresh, status=status)
+        return ResolvedSource(got.path, got.title, link)
 
     path = Path(arg)
     if not path.is_file():

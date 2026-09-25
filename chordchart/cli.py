@@ -1,6 +1,8 @@
 """Command line.
 
 chordchart <file-or-link> [--start T] [--end T] [--format txt|json] [-o FILE] ...
+chordchart                  prompts for the link, then start/end
+chordchart --clipboard      reads the link from the clipboard
 chordchart cache info | clear
 """
 
@@ -10,6 +12,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from chordchart import interactive
 from chordchart.download import CacheSummary, cache_summary, clear_cache, default_cache_dir
 from chordchart.errors import ChordChartError
 from chordchart.fetch import DEFAULT_MAX_DURATION
@@ -42,12 +45,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "source",
-        help="audio or video file, or a video link (YouTube and other sites yt-dlp supports)",
+        nargs="?",
+        help=(
+            "audio or video file, or a video link (YouTube and other sites yt-dlp "
+            "supports). Omit it to be prompted, which is easier for links containing '&'"
+        ),
     )
+    parser.add_argument("--clipboard", action="store_true", help="read the link from the clipboard")
     parser.add_argument(
         "--start",
         type=_time,
-        default=0.0,
+        default=None,
         metavar="TIME",
         help="analyse from TIME (SS, MM:SS or H:MM:SS)",
     )
@@ -93,15 +101,34 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.end is not None and args.end <= args.start:
+    if args.end is not None and args.end <= (args.start or 0.0):
         parser.error("--end must be after --start")
+
+    start, end = args.start, args.end
+    try:
+        if args.clipboard:
+            if args.source is not None:
+                parser.error("--clipboard can't be combined with a source argument")
+            args.source = interactive.read_clipboard()
+            print(f"from clipboard: {args.source}", file=sys.stderr)
+        elif args.source is None:
+            if not interactive.is_interactive():
+                parser.error("a source is required (or run in a terminal to be prompted)")
+            answers = interactive.prompt_for_source(start, end)
+            args.source, start, end = answers.source, answers.start, answers.end
+    except (KeyboardInterrupt, EOFError):
+        print(file=sys.stderr)
+        return interactive.INTERRUPTED
+    except ChordChartError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return exc.exit_code
 
     try:
         song = analyze(
             args.source,
             max_duration=args.max_duration * 60,
-            start=args.start,
-            end=args.end,
+            start=start or 0.0,
+            end=end,
             refresh=args.refresh,
             status=lambda message: print(message, file=sys.stderr),
         )

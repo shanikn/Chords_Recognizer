@@ -40,6 +40,12 @@ class NetworkError(ChordChartError):
     exit_code = 2
 
 
+class InputError(ChordChartError):
+    """The source couldn't be read (e.g. an empty clipboard)."""
+
+    exit_code = 2
+
+
 class CacheError(ChordChartError):
     """`chordchart cache clear` refused to touch a folder that isn't ours."""
 
