@@ -40,6 +40,12 @@ class NetworkError(ChordChartError):
     exit_code = 2
 
 
+class CacheError(ChordChartError):
+    """`chordchart cache clear` refused to touch a folder that isn't ours."""
+
+    exit_code = 2
+
+
 class DownloadFailedError(ChordChartError):
     """Anything else yt-dlp reports, usually fixed by upgrading yt-dlp."""
 

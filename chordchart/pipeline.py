@@ -1,12 +1,12 @@
-"""The one public entry point: audio in, `Song` out.
+"""The one public entry point: a file or a link in, `Song` out.
 
-decode -> beats -> chords -> key -> beat_sync -> group_bars -> Song
+resolve (download) -> decode -> beats -> chords -> key -> beat_sync -> group_bars -> Song
 """
 
 from __future__ import annotations
 
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from pathlib import Path
 
@@ -18,6 +18,7 @@ from chordchart.model import Segment, Song
 from chordchart.postprocess import PostprocessOptions, beat_sync, group_bars, labels_to_segments
 from chordchart.recognizers.base import ChordRecognizer
 from chordchart.recognizers.madmom_crf import MadmomCRFRecognizer
+from chordchart.sources import resolve_source
 
 MIN_BARS = 2
 
@@ -31,18 +32,23 @@ def analyze(
     beats_per_bar: Sequence[int] = (3, 4),
     start: float = 0.0,
     end: float | None = None,
+    refresh: bool = False,
+    status: Callable[[str], None] | None = None,
 ) -> Song:
-    """Analyse `source`, or just its `start`-`end` section (seconds).
+    """Analyse `source` (a path or an http(s) link), or just its `start`-`end` section.
 
     The models only see the section, so their times start at 0. They are shifted by
     `start` straight away, and every time in the returned Song is absolute.
+    `refresh` re-downloads a cached link. `status` receives one-line progress messages.
     """
-    src = Path(source)
+    resolved = resolve_source(
+        str(source), max_duration=max_duration, refresh=refresh, status=status
+    )
     recognizer = recognizer or MadmomCRFRecognizer()
 
     with tempfile.TemporaryDirectory(prefix="chordchart-", ignore_cleanup_errors=True) as tmp:
         wav = Path(tmp) / "audio.wav"
-        duration = decode_to_wav(src, wav, max_duration, start=start, end=end)
+        duration = decode_to_wav(resolved.path, wav, max_duration, start=start, end=end)
         beats = track_beats(wav, beats_per_bar)
         segments = recognizer.recognize(wav)
         key = detect_key(wav)
@@ -63,8 +69,8 @@ def analyze(
         warnings.append("2 beats per bar detected: this may be 6/8 counted in dotted quarters.")
 
     return Song(
-        title=src.stem,
-        source=str(src),
+        title=resolved.title,
+        source=resolved.source,
         duration=duration,
         key=key,
         bpm=beats.bpm,

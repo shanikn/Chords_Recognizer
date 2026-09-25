@@ -34,6 +34,7 @@ from yt_dlp.utils import DownloadError, ExtractorError, UnsupportedError
 
 from chordchart.errors import (
     AudioRejectedError,
+    CacheError,
     ChordChartError,
     DownloadFailedError,
     InvalidLinkError,
@@ -209,6 +210,59 @@ def _reason(err: DownloadError) -> str:
     text = re.sub(r"^\[[^\]]+\]\s+[^:\s]+:\s*", "", text)  # "[youtube] <id>: "
     text = re.split(r"\s*\(caused by |;\s*please report this issue", text)[0]
     return " ".join(text.split()).rstrip(".")
+
+
+# --- cache management (`chordchart cache info | clear`) ---------------------------
+
+# Files this module writes: index.json (+ .tmp), "<extractor>-<id>.<ext>" downloads,
+# their ".json" sidecars, and yt-dlp's ".part"/".ytdl" leftovers. With
+# restrictfilenames, extractor and id are ASCII letters, digits, "_" and "-".
+_OUR_FILE = re.compile(
+    r"^(index\.(json|tmp)|[a-z0-9_]+-[A-Za-z0-9_-]+\.[A-Za-z0-9]+(\.(part|ytdl))?)$"
+)
+
+
+@dataclass(frozen=True)
+class CacheSummary:
+    folder: Path
+    downloads: int
+    size: int  # bytes of our files, sidecars and leftovers included
+
+
+def cache_summary(folder: Path) -> CacheSummary:
+    files = _our_files(folder)
+    downloads = sum(1 for p in files if _is_download(p))
+    return CacheSummary(folder, downloads, sum(p.stat().st_size for p in files))
+
+
+def clear_cache(folder: Path) -> CacheSummary:
+    """Delete our files from `folder` and report what was removed.
+
+    Refuses a folder with no index.json that contains files we didn't write. That
+    guards against a mistyped CHORDCHART_CACHE_DIR pointing somewhere important.
+    Unknown files in a folder that *is* ours are left alone.
+    """
+    if folder.is_dir() and not (folder / INDEX).exists():
+        foreign = [p.name for p in folder.iterdir() if not _OUR_FILE.match(p.name)]
+        if foreign:
+            raise CacheError(
+                f"{folder} is not a chordchart cache (no {INDEX}, and it contains "
+                f"{foreign[0]!r}); nothing was deleted"
+            )
+    removed = cache_summary(folder)
+    for path in _our_files(folder):
+        path.unlink()
+    return removed
+
+
+def _our_files(folder: Path) -> list[Path]:
+    if not folder.is_dir():
+        return []
+    return [p for p in folder.iterdir() if p.is_file() and _OUR_FILE.match(p.name)]
+
+
+def _is_download(path: Path) -> bool:
+    return path.suffix not in _NOT_MEDIA and not path.name.startswith("index.")
 
 
 class _Logger:

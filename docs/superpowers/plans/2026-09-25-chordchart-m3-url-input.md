@@ -198,6 +198,22 @@ times always refer to the original audio. Nothing downstream of the WAV changes.
   files and the index; `clear` refuses a foreign directory; `--help` contains the cache
   path.
 
+### Task 6: Whole-bar expansion for sections (decided after task 3)
+
+A `--start`/`--end` that falls mid-bar currently produces a partial first/last bar that
+looks like a pickup. Instead:
+- Decode `PAD = 5 s` extra on each side (clamped to the file). That's at least one bar at
+  the DBN's slowest tempo (55 BPM), and it gives the models context at the edges.
+- Keep beats from the last downbeat ≤ `start` to the first downbeat ≥ `end`. The chart
+  covers whole bars.
+- `Song.section_start/end` hold the *actual* bar-aligned range. New
+  `requested_start/end` fields keep what the user typed. The header shows
+  `Section: 0:04-0:16 (requested 0:05-0:15)` when the two differ.
+- A pickup bar (index 0) only happens when the chart starts at 0:00 of the source.
+- **Slow tests:** click track `--start 5 --end 15` gives bars from 4 s to 16 s, all with
+  4 beats, no bar 0, and a header showing both ranges. With `start=0`, the pickup
+  behaviour is unchanged.
+
 ### Then: finish M2 task 9 with your link
 
 Run `uv run chordchart <your link> [--start ... --end ...]` through the real command, and

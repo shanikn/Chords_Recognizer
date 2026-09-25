@@ -1,0 +1,43 @@
+ChordChart
+==========
+
+Detects the chords of a song and prints a bar-aligned chord chart with key, tempo and
+time signature. Works on local audio/video files and on video links (YouTube and other
+sites supported by yt-dlp). Local use only. The chord and beat models come from madmom
+(model files licensed CC BY-NC-SA 4.0, so non-commercial use only).
+
+Setup (Windows)
+---------------
+    winget install --id Gyan.FFmpeg -e     # then open a new terminal
+    uv sync                                # builds madmom from source (needs MSVC Build Tools)
+
+Usage
+-----
+    uv run chordchart path/to/song.mp3
+    uv run chordchart "https://www.youtube.com/watch?v=..."
+    uv run chordchart song.mp3 --start 1:05 --end 2:10    # just part of the song
+    uv run chordchart song.mp3 --format json -o song.json
+    uv run chordchart --help
+
+Times in --start/--end are SS, MM:SS or H:MM:SS. Chart and JSON times always refer to
+the original song, even when only a section is analysed.
+
+Download cache
+--------------
+Links are downloaded once and reused. Running the same link again needs no network.
+    Location:  %LOCALAPPDATA%\chordchart\cache\downloads
+               (set CHORDCHART_CACHE_DIR to use another folder; --help shows the path)
+    uv run chordchart cache info       # location, number of downloads, size
+    uv run chordchart cache clear      # delete all downloads
+    uv run chordchart <link> --refresh # download that link again
+
+If YouTube downloads start failing, upgrade yt-dlp:
+    uv lock --upgrade-package yt-dlp && uv sync
+
+Tests
+-----
+    uv run pytest                          # fast tests (no models, no network)
+    uv run pytest -m "slow or not slow"    # plus the model tests
+    uv run pytest -m network               # real YouTube downloads
+
+Design: docs/superpowers/specs/2026-09-25-chordchart-design.md

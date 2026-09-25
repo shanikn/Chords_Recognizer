@@ -108,8 +108,11 @@ web server are thin clients of it.
 
 ```
 chordchart/
-  fetch.py        URL | path -> original file -> 44.1 kHz mono WAV (via ffmpeg)
-  cache.py        .cache/<sha256 of original audio>/ : wav, beats.json, raw_chords.json
+  sources.py      what the user typed -> local file + title (link -> download.py)
+  download.py     yt-dlp: link -> cached audio file; one-line link errors; cache info/clear
+  fetch.py        file -> 44.1 kHz mono WAV (via ffmpeg), optional --start/--end section
+  timecode.py     "1:15" <-> seconds
+  cache.py        (M5) analysis cache keyed by audio sha256: beats.json, raw_chords.json
   beats.py        -> Beats{times[], beat_in_bar[], bpm, meter}
   recognizers/
     base.py       ChordRecognizer protocol: recognize(wav_path) -> list[Segment]
@@ -124,7 +127,8 @@ chordchart/
     chordpro.py   ChordPro 6 {start_of_grid} ... {end_of_grid}
     html.py       self-contained HTML with print stylesheet (PDF = browser print)
   pipeline.py     analyze(source, options) -> Song   (the one public entry point)
-  cli.py          chordchart <url|file> [--format txt|chordpro|html|json] [-o FILE]
+  cli.py          chordchart <url|file> [--start T] [--end T] [--format ...] [-o FILE]
+                  chordchart cache info | clear
   annotate/       .lab annotation helper (§6)
 evaluate/
   songs/<slug>/   chords.lab, beats.txt, meta.toml   (committed)
@@ -148,10 +152,21 @@ and capo) works from `Song`. Transpose and capo are pure functions on symbols.
 
 ## 4. Data flow
 
-1. **fetch:** for a URL, yt-dlp downloads bestaudio into the cache. A local path is
-   used as-is. ffmpeg decodes to 44.1 kHz mono 16-bit PCM WAV. The cache key is the
-   sha256 of the original file, so re-runs skip every stage that already has a
-   cached result.
+1. **resolve + fetch:** an http(s) link is resolved by yt-dlp (`yt-dlp[default,deno]`)
+   and its best audio is downloaded once into the **download cache**:
+   - Location: `%LOCALAPPDATA%\chordchart\cache\downloads`, or
+     `$CHORDCHART_CACHE_DIR/downloads`.
+   - Files: `<extractor>-<id>.<ext>` with a `.json` sidecar, plus `index.json`
+     (exact link → file). The same link again needs no network. A different link to a
+     cached video needs one metadata request and no download.
+   - Management: `chordchart cache info | clear`, and `--refresh` to re-download.
+   - Rejected before download: playlists and feeds, live streams, and videos longer
+     than `--max-duration`.
+
+   A local path is used as-is. ffmpeg decodes to 44.1 kHz mono 16-bit PCM WAV,
+   optionally only the `--start`/`--end` section. All `Song` times are absolute in the
+   source. Caching *analysis* results (beats, raw chords, keyed by audio sha256) moved
+   to M5, where the eval sweeps benefit.
 2. **beats:** downbeat tracking gives beat times and each beat's position in the bar.
    BPM = 60 / median inter-beat interval. Meter = the most common bar length.
 3. **chords:** the recognizer returns raw `(start, end, harte_label)` segments.
@@ -290,10 +305,15 @@ Opening an existing slug loads its annotation, so work can resume.
 | Situation | Behaviour |
 |---|---|
 | `ffmpeg` not on PATH | Exit with the `winget install Gyan.FFmpeg` hint |
-| yt-dlp failure (private, geo-blocked, age-gated, network) | Exit code 2, show yt-dlp's message, suggest `uv lock --upgrade-package yt-dlp` |
+| Unsupported site, malformed link, playlist/feed, live stream | `not a single-video link: <url> (<reason>)`, exit code 2 |
+| Private, removed, age-restricted, geo-blocked video | `video unavailable: <yt-dlp's reason>`, exit code 2 |
+| No connection, DNS failure, timeout | `network error: could not reach <host>; check your internet connection`, exit code 2 |
+| Any other yt-dlp failure | `download failed: <reason>. YouTube changes often; try: uv lock --upgrade-package yt-dlp && uv sync`, exit code 2 |
+| Missing path that looks like a domain (`youtu.be/x`) | `file not found: ... (if this is a link, add https:// ...)` |
 | Undecodable file | Show ffmpeg's error, exit code 2 |
-| Audio < 5 s or near-silent | Clear error |
-| Audio > 15 min | Refuse unless `--max-duration` is raised |
+| Audio < 5 s or near-silent; `--start` past the end; section < 5 s | Clear error naming the section when one was selected |
+| Audio or video > 15 min | Refuse and name `--max-duration` (videos are checked before download) |
+| `chordchart cache clear` on a folder that isn't ours | Refuse, delete nothing, exit code 2 |
 | Too few beats found to form bars | Chart falls back to a time-based layout (chords with timestamps) plus a warning in `Song.warnings` |
 
 ## 9. Milestones
@@ -307,8 +327,11 @@ beat tracking and DBN decoding in M2, why smoothing is needed in M5.
 2. **CLI end-to-end on a local file:** fetch (local), beats, chords, key, minimal
    beat-sync + bar grouping, text renderer. *Done when:* a short real clip produces
    a `| C | Am | ...` chart.
-3. **URL input** via yt-dlp, plus the cache. *Done when:* a YouTube URL produces a
-   chart, and a second run is served from the cache.
+3. **URL input** via yt-dlp, plus the download cache and `--start`/`--end` sections
+   (bar-aligned by whole-bar expansion). *Done when:* a YouTube URL produces the same
+   chart as the downloaded file, a second run is served from the cache,
+   `chordchart cache info | clear` work, and the network tests pass under
+   `-m network` (the default suite never touches YouTube).
 4. **Annotation helper + eval harness:** you annotate 2–3 songs, and the baseline
    majmin is recorded.
 5. **Accuracy:** the full post-processing chain, option sweeps in the eval harness,

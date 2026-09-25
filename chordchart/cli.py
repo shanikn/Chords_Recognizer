@@ -1,4 +1,8 @@
-"""Command line: chordchart <audio-file> [--format txt|json] [-o FILE]."""
+"""Command line.
+
+chordchart <file-or-link> [--start T] [--end T] [--format txt|json] [-o FILE] ...
+chordchart cache info | clear
+"""
 
 from __future__ import annotations
 
@@ -6,18 +10,54 @@ import argparse
 import sys
 from pathlib import Path
 
+from chordchart.download import CacheSummary, cache_summary, clear_cache, default_cache_dir
 from chordchart.errors import ChordChartError
 from chordchart.fetch import DEFAULT_MAX_DURATION
 from chordchart.pipeline import analyze
 from chordchart.render.text import render_text
+from chordchart.timecode import parse_time
+
+
+def _downloads_dir() -> Path:
+    return default_cache_dir() / "downloads"
+
+
+def _time(text: str) -> float:
+    try:
+        return parse_time(text)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="chordchart",
         description="Detect the chords of a song and print a bar-aligned chord chart.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            f"Downloads from links are cached in:\n  {_downloads_dir()}\n"
+            "Set CHORDCHART_CACHE_DIR to use another folder.\n"
+            "Manage the cache with: chordchart cache info | chordchart cache clear"
+        ),
     )
-    parser.add_argument("source", help="path to an audio or video file")
+    parser.add_argument(
+        "source",
+        help="audio or video file, or a video link (YouTube and other sites yt-dlp supports)",
+    )
+    parser.add_argument(
+        "--start",
+        type=_time,
+        default=0.0,
+        metavar="TIME",
+        help="analyse from TIME (SS, MM:SS or H:MM:SS)",
+    )
+    parser.add_argument(
+        "--end",
+        type=_time,
+        default=None,
+        metavar="TIME",
+        help="analyse up to TIME",
+    )
     parser.add_argument("--format", choices=["txt", "json"], default="txt")
     parser.add_argument("-o", "--output", type=Path, help="write to FILE instead of stdout")
     parser.add_argument(
@@ -25,15 +65,46 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=DEFAULT_MAX_DURATION / 60,
         metavar="MINUTES",
-        help="refuse longer audio (default: %(default)g)",
+        help="refuse longer audio or videos (default: %(default)g)",
+    )
+    parser.add_argument(
+        "--refresh", action="store_true", help="download a link again even if it is cached"
+    )
+    return parser
+
+
+def build_cache_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="chordchart cache",
+        description=f"Manage downloaded audio in {_downloads_dir()}",
+    )
+    parser.add_argument(
+        "action",
+        choices=["info", "clear"],
+        help="info: show location and size; clear: delete all downloads",
     )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["cache"]:  # a file literally named "cache" can be passed as ./cache
+        return cache_main(argv[1:])
+
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.end is not None and args.end <= args.start:
+        parser.error("--end must be after --start")
+
     try:
-        song = analyze(args.source, max_duration=args.max_duration * 60)
+        song = analyze(
+            args.source,
+            max_duration=args.max_duration * 60,
+            start=args.start,
+            end=args.end,
+            refresh=args.refresh,
+            status=lambda message: print(message, file=sys.stderr),
+        )
     except ChordChartError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return exc.exit_code
@@ -48,3 +119,27 @@ def main(argv: list[str] | None = None) -> int:
             sys.stdout.reconfigure(errors="replace")
         sys.stdout.write(text)
     return 0
+
+
+def cache_main(argv: list[str]) -> int:
+    args = build_cache_parser().parse_args(argv)
+    folder = _downloads_dir()
+    try:
+        if args.action == "info":
+            summary = cache_summary(folder)
+            print(f"cache: {folder}\n{_describe(summary)}")
+        else:
+            removed = clear_cache(folder)
+            if removed.downloads == 0 and removed.size == 0:
+                print(f"cache is empty: {folder}")
+            else:
+                print(f"removed {_describe(removed)} from {folder}")
+    except ChordChartError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return exc.exit_code
+    return 0
+
+
+def _describe(summary: CacheSummary) -> str:
+    noun = "download" if summary.downloads == 1 else "downloads"
+    return f"{summary.downloads} {noun} ({summary.size / 1e6:.1f} MB)"
