@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 
 from chordchart.errors import AudioDecodeError, AudioRejectedError, FfmpegNotFoundError
+from chordchart.timecode import format_time
 
 SAMPLE_RATE = 44_100
 MIN_DURATION = 5.0
@@ -32,11 +33,30 @@ def find_ffmpeg() -> str:
     return path
 
 
-def decode_to_wav(src: Path, dst: Path, max_duration: float = DEFAULT_MAX_DURATION) -> float:
-    """Decode `src` into a standard WAV at `dst` and return its duration in seconds."""
+def decode_to_wav(
+    src: Path,
+    dst: Path,
+    max_duration: float = DEFAULT_MAX_DURATION,
+    start: float = 0.0,
+    end: float | None = None,
+) -> float:
+    """Decode `src` into a standard WAV at `dst` and return its duration in seconds.
+
+    `start`/`end` (seconds in the source) select a section. ffmpeg seeks in the input,
+    so the rest of the file is never decoded.
+    """
     src, dst = Path(src), Path(dst)
     if not src.is_file():
         raise AudioDecodeError(f"file not found: {src}")
+    if end is not None and end <= start:
+        raise AudioRejectedError(
+            f"--end must be after --start (got {format_time(start)} to {format_time(end)})"
+        )
+    section = []
+    if start > 0:
+        section += ["-ss", f"{start:.3f}"]
+    if end is not None:
+        section += ["-to", f"{end:.3f}"]  # an input option, so an absolute source time
     cmd = [
         find_ffmpeg(),
         "-nostdin",
@@ -44,6 +64,7 @@ def decode_to_wav(src: Path, dst: Path, max_duration: float = DEFAULT_MAX_DURATI
         "-loglevel",
         "error",
         "-y",
+        *section,
         "-i",
         str(src),
         "-vn",
@@ -64,14 +85,17 @@ def decode_to_wav(src: Path, dst: Path, max_duration: float = DEFAULT_MAX_DURATI
 
     samples = read_wav(dst)
     duration = len(samples) / SAMPLE_RATE
+    if duration == 0 and start > 0:
+        raise AudioRejectedError(f"--start {format_time(start)} is past the end of the audio")
     if duration > max_duration:
         raise AudioRejectedError(
             f"audio is longer than {max_duration / 60:g} min; "
             "raise --max-duration to analyse it anyway"
         )
     if duration < MIN_DURATION:
+        what = "the selected section" if start > 0 or end is not None else "audio"
         raise AudioRejectedError(
-            f"audio is only {duration:.1f} s long; need at least {MIN_DURATION:.0f} s"
+            f"{what} is only {duration:.1f} s long; need at least {MIN_DURATION:.0f} s"
         )
     if float(np.sqrt(np.mean(samples**2))) < SILENCE_RMS:
         raise AudioRejectedError("audio is silent")
