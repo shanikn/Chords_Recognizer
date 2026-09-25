@@ -126,7 +126,7 @@ markers = [
     "slow: runs madmom models on generated audio (seconds per test)",
     "accuracy: needs locally stored annotated audio",
 ]
-addopts = "-m 'not slow and not accuracy'"
+addopts = "-rs -m 'not slow and not accuracy'"
 
 [tool.ruff]
 line-length = 100
@@ -452,7 +452,8 @@ def make_audio(tmp_path_factory):
     """Generate a test audio file with ffmpeg's built-in signal sources (lavfi)."""
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg is None:
-        pytest.skip("ffmpeg not installed")
+        # ffmpeg is a required dependency: fail loudly rather than skip.
+        pytest.fail("ffmpeg not found on PATH. Install it with: winget install Gyan.FFmpeg")
     folder = tmp_path_factory.mktemp("audio")
 
     def _make(name: str, lavfi: str, seconds: float, ext: str = "mp3"):
