@@ -6,7 +6,9 @@ requires-python = ">=3.12,<3.14"
 dependencies = [
     # Pinned: main has not moved since this commit (spec §2.1). PyPI 0.16.1 does not build.
     "madmom @ git+https://github.com/CPJKU/madmom@27f032e8947204902c675e5e341a3faf5dc86dae",
-    "numpy>=2.0",
+    # Capped: madmom calls np.maximum(x, 0, out) positionally, deprecated in NumPy 2.5
+    # and due to become an error. See spec §2.1 for the two ways to lift the cap.
+    "numpy>=2.0,<2.6",
 ]
 
 [project.scripts]
@@ -32,6 +34,12 @@ markers = [
     "accuracy: needs locally stored annotated audio",
 ]
 addopts = "-rs -m 'not slow and not accuracy'"
+# Any warning raised from madmom code fails the test run (spec §2.1), except the one
+# known deprecation below. Later entries take precedence over earlier ones.
+filterwarnings = [
+    "error::Warning:madmom",
+    "ignore:Passing more than 2 positional arguments to np.maximum:DeprecationWarning:madmom.ml.nn.activations",
+]
 
 [tool.ruff]
 line-length = 100

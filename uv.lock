@@ -21,7 +21,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "madmom", git = "https://github.com/CPJKU/madmom?rev=27f032e8947204902c675e5e341a3faf5dc86dae" },
-    { name = "numpy", specifier = ">=2.0" },
+    { name = "numpy", specifier = ">=2.0,<2.6" },
 ]
 
 [package.metadata.requires-dev]

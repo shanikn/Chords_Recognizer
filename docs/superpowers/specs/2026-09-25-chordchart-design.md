@@ -60,6 +60,47 @@ Guards:
 - If that happens, the fix is to pin to the PR #559 head commit instead, not to
   fork madmom.
 
+**Inference-time deprecation (found in M2, task 5).** Running the chord CNN makes NumPy
+2.5 warn from `madmom/ml/nn/activations.py:148`:
+
+```python
+def relu(x, out=None):
+    return np.maximum(x, 0, out)   # `out` passed positionally: deprecated in NumPy 2.5
+```
+
+- **Affected:** only the chord CNN. The key CNN and the downbeat RNN don't use this
+  function. Results are correct today.
+- **Risk:** once NumPy turns the deprecation into an error, chord recognition crashes.
+  PR #559 does **not** fix this line, and no upstream issue or PR mentions it
+  (checked 2026-09-25).
+- **Why the load guard missed it:** it only fires when a model *runs*, not when it loads.
+
+Guards:
+- **NumPy cap:** `numpy>=2.0,<2.6` in `pyproject.toml`. An upgrade can't silently pull
+  in a NumPy that removes the positional form.
+- **Test-time warning filter:** pytest `filterwarnings` turns *any* warning raised
+  from madmom code into an error, with this one known deprecation as the only
+  exception. A new madmom warning, from a NumPy bump or anything else, fails the
+  slow tests loudly. Verified both ways: 29 tests pass with the filter, and removing
+  the exception fails the chord test.
+
+**Two ways to lift the cap later.** Whichever route is used, delete the
+`ignore:Passing more than 2 positional arguments to np.maximum` filter entry at the
+same time, so the error filter then proves the fix.
+1. **Re-pin to an upstream fix.** When a madmom commit changes the line to
+   `np.maximum(x, 0, out=out)` (on `main`, or in the head commit of an open PR if we
+   accept that as with #559), update the pinned commit hash. Then run
+   `uv run pytest -m "slow or not slow"` with the ignore entry removed. That's the
+   preferred route because it leaves no local code.
+2. **Apply the one-line fix locally, at runtime.** Add `chordchart/_madmom_compat.py`
+   that replaces `madmom.ml.nn.activations.relu` with a version that passes `out=out`
+   by keyword. `recognizers/madmom_crf.py` imports it before any processor is built.
+   This works because madmom's model files are pickles that refer to `relu` by its
+   qualified name, which is looked up when the model loads, so every model picks up
+   the replacement. The installed package is never edited. A test asserts that
+   `madmom.ml.nn.activations.relu` is the patched function, so the patch can't
+   silently stop applying. Remove the module once route 1 becomes available.
+
 ## 3. Architecture
 
 A Python library at the core. The CLI, the evaluation harness, and later the
@@ -220,6 +261,13 @@ Opening an existing slug loads its annotation, so work can resume.
   for every stage, per song and as a duration-weighted mean. The summary table shows
   each stage's delta from `raw`. It also reports beat and downbeat F-measure against
   `beats.txt`.
+- **Tempo "octave" errors are reported separately.** A half- or double-tempo track
+  scores about 0.67 beat F-measure, which looks the same as general sloppiness. So the
+  harness also reports `mir_eval`'s continuity scores:
+  - **CMLt** accepts only the annotated metrical level;
+  - **AMLt** also accepts double, half and off-beat tracking.
+  A high AMLt with a low CMLt means specifically "octave or phase error". The
+  per-song table flags those songs.
 - Writes `evaluate/results/<date>-<gitsha>.json`, so each change has a before/after number.
 
 **pytest suites:**
@@ -279,6 +327,19 @@ beat tracking and DBN decoding in M2, why smoothing is needed in M5.
    - Only display strings change. Harte labels in the pipeline and in `.lab` files keep
      whatever spelling they have, and `mir_eval` compares pitch classes, so accuracy
      numbers are unaffected. Unit tests cover all 24 keys.
+   Also in M5: **half/double-tempo handling.** The downbeat DBN searches 55–215 BPM
+   (madmom defaults), so a song and its double or half tempo are often both in range.
+   A double-tempo track shows every chord twice, with twice as many bars. A half-tempo
+   track silently loses chord changes that happen mid-bar.
+   - `--bpm-range MIN-MAX` CLI option, passed to the DBN as `min_bpm`/`max_bpm`, lets
+     the user fix a known song. The same range is a sweep parameter in the eval
+     harness.
+   - A likely-octave-error warning in `Song.warnings`, taken from the chart itself:
+     - *probably double:* almost every chord lasts an even number of bars;
+     - *probably half:* a large share of bars need both split regions.
+     The thresholds are tuned on the annotated songs (CMLt vs AMLt from §7 is the
+     ground truth). The warning is kept only if it flags the octave-error songs
+     without flagging the correct ones.
 6. **Exports:** ChordPro and HTML renderers with golden tests.
 7. **Extended vocabulary (7/sus):** add the `sevenths` metric to the eval, then try in
    order until one improves `sevenths` without hurting `majmin`:
