@@ -7,13 +7,14 @@ from __future__ import annotations
 
 import tempfile
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 
-from chordchart.beats import track_beats
+from chordchart.beats import Beats, track_beats
 from chordchart.errors import AudioRejectedError
 from chordchart.fetch import DEFAULT_MAX_DURATION, decode_to_wav
 from chordchart.key import detect_key
-from chordchart.model import Song
+from chordchart.model import Segment, Song
 from chordchart.postprocess import PostprocessOptions, beat_sync, group_bars, labels_to_segments
 from chordchart.recognizers.base import ChordRecognizer
 from chordchart.recognizers.madmom_crf import MadmomCRFRecognizer
@@ -28,13 +29,20 @@ def analyze(
     recognizer: ChordRecognizer | None = None,
     options: PostprocessOptions | None = None,
     beats_per_bar: Sequence[int] = (3, 4),
+    start: float = 0.0,
+    end: float | None = None,
 ) -> Song:
+    """Analyse `source`, or just its `start`-`end` section (seconds).
+
+    The models only see the section, so their times start at 0. They are shifted by
+    `start` straight away, and every time in the returned Song is absolute.
+    """
     src = Path(source)
     recognizer = recognizer or MadmomCRFRecognizer()
 
     with tempfile.TemporaryDirectory(prefix="chordchart-", ignore_cleanup_errors=True) as tmp:
         wav = Path(tmp) / "audio.wav"
-        duration = decode_to_wav(src, wav, max_duration)
+        duration = decode_to_wav(src, wav, max_duration, start=start, end=end)
         beats = track_beats(wav, beats_per_bar)
         segments = recognizer.recognize(wav)
         key = detect_key(wav)
@@ -45,8 +53,10 @@ def analyze(
             f"could not find a steady beat (fewer than {MIN_BARS} bars detected)"
         )
 
-    labels = beat_sync(segments, beats.times, duration)
-    bars = group_bars(beats, labels, duration, options)
+    beats, segments = _shift(beats, segments, start)
+    end_time = start + duration
+    labels = beat_sync(segments, beats.times, end_time)
+    bars = group_bars(beats, labels, end_time, options)
 
     warnings = []
     if beats.meter == 2:
@@ -61,8 +71,20 @@ def analyze(
         meter=beats.meter,
         bars=bars,
         warnings=warnings,
+        section_start=start,
+        section_end=end,
         debug={
             "raw": segments,
-            "beat_sync": labels_to_segments(beats.times, labels, duration),
+            "beat_sync": labels_to_segments(beats.times, labels, end_time),
         },
+    )
+
+
+def _shift(beats: Beats, segments: list[Segment], offset: float) -> tuple[Beats, list[Segment]]:
+    """Move section-relative times onto the source's timeline."""
+    if not offset:
+        return beats, segments
+    return (
+        replace(beats, times=[t + offset for t in beats.times]),
+        [Segment(s.start + offset, s.end + offset, s.label) for s in segments],
     )

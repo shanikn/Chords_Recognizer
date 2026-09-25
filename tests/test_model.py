@@ -26,6 +26,7 @@ def test_to_json_excludes_debug_by_default():
     assert "debug" not in data
     assert data["bars"][0]["chords"][0] == {"beat": 0, "time": 0.0, "symbol": "C", "harte": "C:maj"}
     assert data["key"] == {"tonic": "C", "mode": "major", "confidence": 0.9}
+    assert (data["section_start"], data["section_end"]) == (0.0, None)
 
 
 def test_to_json_can_include_debug():

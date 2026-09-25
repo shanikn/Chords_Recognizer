@@ -51,12 +51,16 @@ class Bar:
 class Song:
     title: str
     source: str
-    duration: float
+    duration: float  # seconds analysed (the section's length when one is selected)
     key: Key
     bpm: float
     meter: int  # beats per bar
     bars: list[Bar]
     warnings: list[str] = field(default_factory=list)
+    # The analysed section of the source, in seconds. All times in the Song (bars,
+    # chords, debug segments) are absolute, measured from the start of the source.
+    section_start: float = 0.0
+    section_end: float | None = None  # None = to the end of the source
     # Intermediate chord sequences, per pipeline stage, for the eval harness (spec §7).
     debug: dict[str, list[Segment]] = field(default_factory=dict)
 
