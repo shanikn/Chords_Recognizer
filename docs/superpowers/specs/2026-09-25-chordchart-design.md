@@ -108,7 +108,7 @@ and capo) works from `Song`. Transpose and capo are pure functions on symbols.
 ## 4. Data flow
 
 1. **fetch:** for a URL, yt-dlp downloads bestaudio into the cache. A local path is
-   used as-is. ffmpeg decodes to 44.1 kHz mono float WAV. The cache key is the
+   used as-is. ffmpeg decodes to 44.1 kHz mono 16-bit PCM WAV. The cache key is the
    sha256 of the original file, so re-runs skip every stage that already has a
    cached result.
 2. **beats:** downbeat tracking gives beat times and each beat's position in the bar.
