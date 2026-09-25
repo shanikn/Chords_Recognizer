@@ -1,0 +1,41 @@
+[project]
+name = "chordchart"
+version = "0.1.0"
+description = "Detect the chords of a song and print a bar-aligned chord chart."
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    # Pinned: main has not moved since this commit (spec §2.1). PyPI 0.16.1 does not build.
+    "madmom @ git+https://github.com/CPJKU/madmom@27f032e8947204902c675e5e341a3faf5dc86dae",
+    "numpy>=2.0",
+]
+
+[project.scripts]
+chordchart = "chordchart.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6", "scipy>=1.13"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["chordchart"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: runs madmom models on generated audio (seconds per test)",
+    "accuracy: needs locally stored annotated audio",
+]
+addopts = "-m 'not slow and not accuracy'"
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
