@@ -134,11 +134,13 @@ def main(argv: list[str] | None = None) -> int:
             start=start or 0.0,
             end=end,
             refresh=args.refresh,
-            status=lambda message: print(message, file=sys.stderr),
+            status=_print_status,
         )
     except ChordChartError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return exc.exit_code
+    if song.timings:
+        print(f"total: {sum(song.timings.values()):.1f} s", file=sys.stderr)
 
     text = render_text(song) if args.format == "txt" else song.to_json() + "\n"
     if args.output:
@@ -150,6 +152,15 @@ def main(argv: list[str] | None = None) -> int:
             sys.stdout.reconfigure(errors="replace")
         sys.stdout.write(text)
     return 0
+
+
+def _print_status(message: str, elapsed: float | None = None) -> None:
+    """Progress on stderr: "tracking beats" when a stage starts, then
+    "  tracking beats: 4.2 s" when it ends."""
+    if elapsed is None:
+        print(message, file=sys.stderr, flush=True)
+    else:
+        print(f"  {message}: {elapsed:.1f} s", file=sys.stderr, flush=True)
 
 
 def serve_main(argv: list[str]) -> int:

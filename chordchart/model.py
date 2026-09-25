@@ -65,6 +65,8 @@ class Song:
     # What the user asked for (--start/--end), before widening. None = no section.
     requested_start: float | None = None
     requested_end: float | None = None
+    # Seconds per pipeline stage: download, decode, beats, chords, key, chart.
+    timings: dict[str, float] = field(default_factory=dict)
     # Intermediate chord sequences, per pipeline stage, for the eval harness (spec §7).
     debug: dict[str, list[Segment]] = field(default_factory=dict)
 

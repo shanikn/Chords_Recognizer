@@ -51,6 +51,8 @@
   #steps li { padding: 2px 0 2px 24px; position: relative; }
   #steps li::before { content: "\2713"; position: absolute; left: 4px; color: var(--accent); }
   #steps li.current { color: var(--text); }
+  #steps li.total { color: var(--text); font-weight: 600; }
+  #steps li.total::before { content: ""; }
   #steps li.current::before {
     content: ""; width: 10px; height: 10px; top: 8px; left: 4px;
     border: 2px solid var(--accent); border-right-color: transparent; border-radius: 50%;
@@ -103,14 +105,27 @@ function showError(message) {
   errorBox.hidden = false;
 }
 
-function showSteps(messages, running) {
-  steps.replaceChildren(...messages.map((text, i) => {
+// messages: [{text, seconds}]; seconds is filled in when a timed stage finishes.
+function showSteps(messages, running, totalSeconds) {
+  const items = messages.map((m, i) => {
     const li = document.createElement("li");
-    li.textContent = text;
-    if (running && i === messages.length - 1) li.className = "current";
+    li.textContent = m.seconds == null ? m.text : `${m.text} — ${m.seconds.toFixed(1)} s`;
+    if (running && i === messages.length - 1 && m.seconds == null) li.className = "current";
     return li;
-  }));
-  steps.hidden = messages.length === 0;
+  });
+  if (totalSeconds != null) {
+    const li = document.createElement("li");
+    li.className = "total";
+    li.textContent = `total — ${totalSeconds.toFixed(1)} s`;
+    items.push(li);
+  }
+  steps.replaceChildren(...items);
+  steps.hidden = items.length === 0;
+}
+
+function totalOf(song) {
+  const values = Object.values((song && song.timings) || {});
+  return values.length ? values.reduce((a, b) => a + b, 0) : null;
 }
 
 async function poll(jobId) {
@@ -118,7 +133,7 @@ async function poll(jobId) {
     const response = await fetch(`/api/jobs/${jobId}`);
     const job = await response.json();
     if (!response.ok) throw new Error(job.error || `HTTP ${response.status}`);
-    showSteps(job.messages, job.state === "running");
+    showSteps(job.messages, job.state === "running", job.state === "done" ? totalOf(job.song) : null);
     if (job.state === "done") { chart.textContent = job.chart; chartWrap.hidden = false; return; }
     if (job.state === "error") { showError(job.error); return; }
     await new Promise((resolve) => setTimeout(resolve, 500));

@@ -43,8 +43,11 @@ def test_analysis_reports_progress_then_the_chart(sample_song):
 
     def fake_analyze(source, **kw):
         seen.update(kw, source=source)
+        kw["status"]("getting audio")
         kw["status"]("downloading: My Song (3:45)")
+        kw["status"]("getting audio", elapsed=3.14159)
         kw["status"]("tracking beats")
+        kw["status"]("tracking beats", elapsed=4.2)
         return sample_song
 
     client = _client(fake_analyze)
@@ -55,7 +58,13 @@ def test_analysis_reports_progress_then_the_chart(sample_song):
     job = _wait(client, response.json()["job_id"])
 
     assert job["state"] == "done"
-    assert job["messages"] == ["downloading: My Song (3:45)", "tracking beats"]
+    # A finished stage gets its time on the entry it started, even when other
+    # messages came in between.
+    assert job["messages"] == [
+        {"text": "getting audio", "seconds": 3.14},
+        {"text": "downloading: My Song (3:45)", "seconds": None},
+        {"text": "tracking beats", "seconds": 4.2},
+    ]
     assert job["chart"] == render_text(sample_song)
     assert job["song"]["title"] == "Test Song"
     assert (seen["source"], seen["start"], seen["end"]) == (LINK, 65.0, 130.0)
@@ -145,7 +154,9 @@ def test_jobs_run_one_at_a_time(sample_song):
     second = client.post("/api/analyze", json={"source": "b.mp3"}).json()["job_id"]
     time.sleep(0.1)
     queued = client.get(f"/api/jobs/{second}").json()
-    assert queued["messages"] == ["waiting for the previous analysis to finish"]
+    assert queued["messages"] == [
+        {"text": "waiting for the previous analysis to finish", "seconds": None}
+    ]
     release.set()
     assert _wait(client, first)["state"] == "done"
     assert _wait(client, second)["state"] == "done"

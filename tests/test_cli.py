@@ -145,3 +145,18 @@ def test_status_goes_to_stderr_not_stdout(monkeypatch, capsys, sample_song):
     captured = capsys.readouterr()
     assert captured.err == "downloading: My Song (3:45)\n"
     assert "downloading" not in captured.out
+
+
+def test_stage_times_and_total_go_to_stderr(monkeypatch, capsys, sample_song):
+    sample_song.timings = {"download": 1.0, "beats": 4.25}
+
+    def fake_analyze(source, **kw):
+        kw["status"]("tracking beats")
+        kw["status"]("tracking beats", elapsed=4.25)
+        return sample_song
+
+    monkeypatch.setattr(cli, "analyze", fake_analyze)
+    assert cli.main(["song.mp3"]) == 0
+    captured = capsys.readouterr()
+    assert captured.err == "tracking beats\n  tracking beats: 4.2 s\ntotal: 5.2 s\n"
+    assert "tracking beats" not in captured.out
