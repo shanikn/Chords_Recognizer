@@ -1,7 +1,7 @@
 # ChordChart — Design Spec
 
 **Date:** 2026-09-25
-**Status:** Approved in conversation; awaiting written-spec review
+**Status:** Approved 2026-09-25 (revised: madmom status, meter-derived splits, stage-wise eval, downbeat marking)
 
 ## 1. Goal
 
@@ -21,7 +21,7 @@ non-commercial.
 | Chord recognition | **madmom** CNN chroma + CRF (`CNNChordFeatureProcessor` → `CRFChordRecognitionProcessor`) | Only candidate that installs and runs on Windows + Python 3.12/3.13 (verified 2026-09-25). Output vocabulary: maj/min/N. |
 | Beats / downbeats | madmom `RNNDownBeatProcessor` + `DBNDownBeatTrackingProcessor(beats_per_bar=[3, 4])` | Same library. `beat_this` (verified installable) is the fallback if beat accuracy is poor. |
 | Key | madmom `CNNKeyRecognitionProcessor` | Same library, 24 major/minor keys. |
-| madmom version | `madmom @ git+https://github.com/CPJKU/madmom@27f032e8947204902c675e5e341a3faf5dc86dae` | Pinned commit (2024-08-25, "CI and NumPy compatibility updates"). The 2018 PyPI release does not build. Builds from source with Cython, so it needs MSVC Build Tools (present on this machine). |
+| madmom version | `madmom @ git+https://github.com/CPJKU/madmom@27f032e8947204902c675e5e341a3faf5dc86dae` | Pinned commit (2024-08-25, "CI and NumPy compatibility updates"). It is still the head of `main` as of 2026-09-25 (see §2.1). The 2018 PyPI release does not build. Builds from source with Cython, so it needs MSVC Build Tools (present on this machine). |
 | Python / tooling | Python 3.12, `uv`, `pytest`, `ruff`; `requires-python = ">=3.12,<3.14"` | 3.12 has the broadest wheel coverage. 3.13 also verified. |
 | Download | `yt-dlp` as a Python dependency (upgradable via `uv`); `ffmpeg` as a system binary (`winget install Gyan.FFmpeg`) | yt-dlp breaks often and needs easy upgrades. |
 | Evaluation | `mir_eval.chord` | Standard MIREX chord metrics. |
@@ -30,6 +30,35 @@ non-commercial.
 Rejected for now: Chordino via `chord-extractor` (its `vamp` C++ extension fails
 to compile on Windows), essentia (no Windows wheels), autochord and BTC (unmaintained).
 Chordino via WSL stays an option for milestone 7 (see §9).
+
+### 2.1 madmom maintenance status (checked 2026-09-25)
+
+GitHub's "pushed 2026-03-20" date does **not** mean `main` has new commits. It
+counts pushes to any branch. `main` has been at `27f032e` since 2024-08-25. The
+2026 push created a branch with a random name (`QXzxw1ZheKVfoet9`) that points at
+that same commit. The only real 2026 activity is **open, unmerged pull requests
+from outside contributors**:
+
+- **#559** "Python 3.14 / NumPy 2.4+ compatibility" (May 2026) makes two changes:
+  - `setup.py` switches from `distutils` to `setuptools.Extension`.
+  - It coerces the int `align` argument to bool when unpickling the bundled models.
+    NumPy 2.4+ deprecates the int form, and NumPy 3 is expected to make it an error.
+- #558 (CI dependency install) and #548 (replaces deprecated `numpy.math` in
+  Cython) touch the same area.
+
+**Nothing newer on `main` to test.** The pin stays at `27f032e`. Verified on that
+pin with Python 3.12, NumPy 2.5.3 and setuptools 84:
+- the build succeeds;
+- every processor we use loads with `-W always` and emits no warnings (chord CNN
+  and CRF, downbeat RNN and DBN, key CNN);
+- the downbeat tracker gets a synthetic accented 120 BPM click track right.
+
+Guards:
+- `requires-python` stays `<3.14`.
+- A fast test loads every processor with warnings turned into errors, so a future
+  NumPy or setuptools upgrade that hits the #559 issues fails loudly.
+- If that happens, the fix is to pin to the PR #559 head commit instead, not to
+  fork madmom.
 
 ## 3. Architecture
 
@@ -69,7 +98,7 @@ tests/
 ```python
 Song:  title, source, duration, key: Key, bpm: float, meter: int,
        bars: list[Bar], warnings: list[str]
-Bar:   index, start, end, chords: list[ChordEvent]   # 1–2 events per bar after post-processing
+Bar:   index, start, end, chords: list[ChordEvent]   # at most len(split_points(meter)) events (§4)
 ChordEvent: beat (0-based within bar), time, symbol ("Am"), harte ("A:min")
 ```
 
@@ -92,9 +121,26 @@ and capo) works from `Song`. Transpose and capo are pure functions on symbols.
       by its stronger neighbour. The model's confidence is not exposed, so
       "stronger" means the longer neighbour, and on a tie the one that is diatonic
       to the detected key.
-   3. *bar-quantize:* at most 2 chords per bar, splitting only at the half-bar
-      (beat 0 or beat meter/2). A chord change off those beats moves to the nearest
-      allowed position.
+   3. *bar-quantize:* chord changes may only happen at the bar's **split points**,
+      which are derived from the detected beats per bar by `split_points(bpb)`:
+
+      | beats per bar | typical meter | split points (0-based beats) | max chords/bar |
+      |---|---|---|---|
+      | 2 | 2/4, or 6/8 tracked at the dotted-quarter pulse | {0, 1} | 2 |
+      | 3 | 3/4 | {0, 2} (the usual "C . G" waltz split) | 2 |
+      | 4 | 4/4 | {0, 2} | 2 |
+      | 6, 9, 12 | 6/8, 9/8, 12/8 tracked at the eighth-note pulse | every 3rd beat: {0, 3, …} | bpb / 3 |
+      | other | — | every 2nd beat if bpb is even, otherwise {0} | — |
+
+      General rule: bpb divisible by 3 and > 3 means compound meter, grouped in
+      threes. Otherwise the meter is simple, grouped in twos, and 3 is the special
+      case {0, 2}. A change between split points moves to the nearest one. Each
+      segment between split points gets its majority chord. `PostprocessOptions`
+      can override the table per bpb. The downbeat tracker's `beats_per_bar`
+      candidates (default `[3, 4]`) are an option too, so 2 and 6 can be tried in
+      the M5 sweeps.
+      Known limit: from the pulse alone, 6/8 at the dotted-quarter pulse can't be
+      told apart from 2/4. It is displayed as "2/4" and noted in `Song.warnings`.
    4. *merge:* repeated consecutive chords collapse into "same as previous".
    5. *simplify:* map to the display vocabulary (maj/min/N now; 7/sus in M7).
    All thresholds live in one `PostprocessOptions` dataclass so the evaluation
@@ -119,11 +165,25 @@ and capo) works from `Song`. Transpose and capo are pure functions on symbols.
 stdlib `http.server` on `127.0.0.1` and opens the browser. It serves one static
 page (vanilla JS, no build step) plus the audio file.
 
-**Phase 1: beats.**
-- Set the meter (default 4/4), press play, and tap `Space` on every beat. The first
-  tap is beat 1 of bar 1. `B` marks a downbeat, which re-syncs the bar count
-  (for pickups or a meter change). `Backspace` undoes a tap.
-- Playback speed (0.5×/0.75×/1×) and a global latency nudge (±ms) help accuracy.
+**Phase 1: beats and downbeats.**
+- Set the beats per bar first (default 4), then press play.
+- **Two tap keys:**
+  - `Enter` = downbeat (beat 1 of a bar).
+  - `Space` = any other beat.
+- **Bar 1 = your first `Enter`.** Any `Space` taps before it are pickup beats: they
+  become a partial **bar 0**, which can hold a chord, and in `beats.txt` they are
+  numbered backwards from the end of a bar (a single pickup in 4/4 is beat 4).
+  Songs with no pickup simply start with `Enter`.
+- **You don't need `Enter` on every bar.** After a downbeat, `Space` taps count up,
+  and every *bpb*-th tap automatically becomes the next downbeat. `Enter` forces a
+  new bar at that tap. Use it to re-sync when your count drifted, or for a meter
+  change. If a bar ends up shorter or longer than *bpb*, it is flagged in yellow in
+  the grid, so it's either intentional (e.g. an inserted 2/4 bar) or gets fixed.
+- `Backspace` undoes the last tap. Playback speed (0.5×/0.75×/1×) and a global
+  latency nudge (±ms) help accuracy.
+- **Fixing downbeats later:** in the phase 2 grid each bar shows its beat ticks.
+  Alt-clicking a tick makes it a downbeat, which splits the bar there. A bar's
+  "merge with next" button removes the following downbeat.
 - Optional **"Pre-fill beats from madmom"** button: you then only correct the result.
   Beats may be pre-filled; **chords are never pre-filled**, so the ground truth
   isn't biased toward the model being evaluated.
@@ -147,8 +207,18 @@ Opening an existing slug loads its annotation, so work can resume.
 - Runs `analyze()` on every song whose audio exists locally.
 - If the audio duration differs from `meta.toml` by more than 0.5 s, it warns and
   skips that song (it's probably a different upload of the song).
-- Reports `mir_eval` **majmin** (the main metric), **root**, and segmentation scores,
-  per song and as a duration-weighted mean. It also reports beat F-measure against
+- **Scores every stage, not just the final chart**, so you can see what each
+  simplification costs:
+  - `raw`: the recognizer's segments, straight from the model;
+  - then one score after each post-processing step (`beat_sync`, `smooth`,
+    `bar_quantize`, `simplify`);
+  - `chart`: the final `Song`, converted back to timed segments. Each chord event
+    lasts until the next one, using the event times.
+  `analyze()` returns these intermediate segment lists in a `debug` field. The
+  harness doesn't re-implement the pipeline.
+- Reports `mir_eval` **majmin** (the main metric), **root**, and segmentation scores
+  for every stage, per song and as a duration-weighted mean. The summary table shows
+  each stage's delta from `raw`. It also reports beat and downbeat F-measure against
   `beats.txt`.
 - Writes `evaluate/results/<date>-<gitsha>.json`, so each change has a before/after number.
 
@@ -162,7 +232,10 @@ Opening an existing slug loads its annotation, so work can resume.
   within ±2 of the click track. It does not check the chords (the model returns N
   on synthetic tones).
 - *Accuracy (`-m accuracy`, skipped when audio is missing):* the mean majmin score
-  must be ≥ the recorded baseline − 0.02. This is a regression guard.
+  of the `chart` stage must be ≥ the recorded baseline − 0.02. This is a regression
+  guard.
+- *Model load guard (fast):* every madmom processor loads with warnings turned into
+  errors (§2.1).
 
 ## 8. Error handling
 
