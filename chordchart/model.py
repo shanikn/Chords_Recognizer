@@ -1,0 +1,74 @@
+"""The data model every part of ChordChart shares.
+
+`Song` is the contract. The pipeline produces it, and the renderers, the evaluation
+harness and (later) the web UI consume it, usually as JSON via `Song.to_json()`.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import asdict, dataclass, field
+
+
+@dataclass(frozen=True)
+class Segment:
+    """A chord over a time span, in seconds. `label` is Harte syntax ("A:min", "N")."""
+
+    start: float
+    end: float
+    label: str
+
+
+@dataclass(frozen=True)
+class Key:
+    tonic: str  # "G#"
+    mode: str  # "major" | "minor"
+    confidence: float  # the model's probability for this key, 0..1
+
+    def __str__(self) -> str:
+        return f"{self.tonic} {self.mode}"
+
+
+@dataclass(frozen=True)
+class ChordEvent:
+    """A chord change inside a bar."""
+
+    beat: int  # 0-based beat within the bar where the chord starts
+    time: float  # seconds
+    symbol: str  # display form, "Am"
+    harte: str  # "A:min"
+
+
+@dataclass
+class Bar:
+    index: int  # 0 = pickup (partial bar before the first downbeat), 1 = first full bar
+    start: float
+    end: float
+    chords: list[ChordEvent]
+
+
+@dataclass
+class Song:
+    title: str
+    source: str
+    duration: float
+    key: Key
+    bpm: float
+    meter: int  # beats per bar
+    bars: list[Bar]
+    warnings: list[str] = field(default_factory=list)
+    # Intermediate chord sequences, per pipeline stage, for the eval harness (spec §7).
+    debug: dict[str, list[Segment]] = field(default_factory=dict)
+
+    def to_json(self, include_debug: bool = False) -> str:
+        data = asdict(self)
+        if not include_debug:
+            data.pop("debug")
+        return json.dumps(data, indent=2)
+
+
+_METER_LABELS = {2: "2/4", 3: "3/4", 4: "4/4", 6: "6/8", 9: "9/8", 12: "12/8"}
+
+
+def meter_label(beats_per_bar: int) -> str:
+    return _METER_LABELS.get(beats_per_bar, f"{beats_per_bar}/4")
