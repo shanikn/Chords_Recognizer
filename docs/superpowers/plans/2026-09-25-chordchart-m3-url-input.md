@@ -178,6 +178,26 @@ times always refer to the original audio. Nothing downstream of the WAV changes.
 - Spec updates: §3 (`download.py`, cache location), §4 step 1, the §8 error table, the
   M3 done criteria (adds `--start/--end`), and the analysis cache moved to M5.
 
+### Task 5: `chordchart cache` (added at approval)
+
+- `chordchart cache info` prints the cache location, the number of files and the total
+  size. `chordchart cache clear` deletes the downloads and the index, then prints what it
+  freed. `clear` only touches the cache directory, and it refuses (with an error) if
+  that directory doesn't look like ours, i.e. has no `index.json` and has files that
+  aren't `<extractor>-<id>.*`. That guards against a mistyped `CHORDCHART_CACHE_DIR`.
+- Dispatch: when the first argument is `cache`, the `cache` subcommand parser runs.
+  Otherwise the existing `chordchart <source>` parser runs. A file literally named
+  `cache` can be passed as `./cache`.
+- `chordchart --help` ends with the resolved cache location and the env var that
+  overrides it. The README documents both commands.
+- The too-long error names the option explicitly (`video is 1:32:10 long, over the
+  15 min limit; raise --max-duration to download it`), and a test asserts that it
+  contains `--max-duration`. The same goes for the local-file too-long error, which
+  already does.
+- **Fast tests:** `info` on an empty and a populated temp cache; `clear` removes the
+  files and the index; `clear` refuses a foreign directory; `--help` contains the cache
+  path.
+
 ### Then: finish M2 task 9 with your link
 
 Run `uv run chordchart <your link> [--start ... --end ...]` through the real command, and
