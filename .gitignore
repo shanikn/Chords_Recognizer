@@ -1,2 +1,34 @@
 .env
-venv\
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Pipeline cache (decoded audio, analysis results)
+.cache/
+
+# Node / web UI
+node_modules/
+web/dist/
+
+# Audio and video: never committed. Only .lab annotations go into git.
+*.mp3
+*.wav
+*.flac
+*.ogg
+*.oga
+*.opus
+*.m4a
+*.aac
+*.wma
+*.aif
+*.aiff
+*.webm
+*.mp4
+*.mkv
+*.mov
