@@ -17,9 +17,10 @@ def test_decodes_stereo_48k_mp3_to_standard_wav(make_audio, tmp_path):
         assert (f.getnchannels(), f.getframerate(), f.getsampwidth()) == (1, SAMPLE_RATE, 2)
     samples = read_wav(dst)
     assert samples.dtype.name == "float32"
-    # lavfi's sine is generated at amplitude 1/8, and ffmpeg's stereo->mono downmix
-    # is -3 dB, so expect a peak around 0.09. The point is "signal present, scaled
-    # to [-1, 1]", not an exact level.
+    # lavfi's sine is generated at amplitude 1/8. The fixture's -ac 2 upmix splits it
+    # at 0.707 per channel (-3 dB), MP3 costs ~0.4 dB, and our stereo->mono downmix
+    # (0.5*L + 0.5*R) is lossless, so expect a peak around 0.084. The point is
+    # "signal present, scaled to [-1, 1]", not an exact level.
     assert 0.01 < abs(samples).max() <= 1.0
 
 
