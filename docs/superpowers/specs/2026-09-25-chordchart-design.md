@@ -266,6 +266,19 @@ beat tracking and DBN decoding in M2, why smoothing is needed in M5.
 5. **Accuracy:** the full post-processing chain, option sweeps in the eval harness,
    and a check of beat_this vs madmom if beat F-measure is weak. *Done when:* every
    kept change is justified by a before/after number.
+   Also in M5: **key-aware enharmonic spelling.** madmom always spells roots with
+   sharps (its label table is `A, A#, B, C, C#, ...`), so a song in F major currently
+   shows `A#` where a musician expects `Bb`.
+   - `symbols.harte_to_symbol` gains a `key: Key | None` parameter.
+   - Flat keys spell every root with flats. Flat keys are the major keys F, Bb, Eb,
+     Ab, Db and Gb, and the minor keys D, G, C, F, Bb and Eb.
+   - All other keys use sharps. With no key, the default is flats for Bb, Eb and Ab
+     and sharps for F# and C#, which are the most common spellings in guitar charts.
+   - The detected key's own name is respelled by the same rule (`A# major` becomes
+     `Bb major`).
+   - Only display strings change. Harte labels in the pipeline and in `.lab` files keep
+     whatever spelling they have, and `mir_eval` compares pitch classes, so accuracy
+     numbers are unaffected. Unit tests cover all 24 keys.
 6. **Exports:** ChordPro and HTML renderers with golden tests.
 7. **Extended vocabulary (7/sus):** add the `sevenths` metric to the eval, then try in
    order until one improves `sevenths` without hurting `majmin`:
