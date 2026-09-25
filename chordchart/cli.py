@@ -13,7 +13,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from chordchart import interactive
+from chordchart import analysis_cache, interactive
 from chordchart.download import CacheSummary, cache_summary, clear_cache, default_cache_dir
 from chordchart.errors import ChordChartError
 from chordchart.fetch import DEFAULT_MAX_DURATION
@@ -139,8 +139,8 @@ def main(argv: list[str] | None = None) -> int:
     except ChordChartError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return exc.exit_code
-    if song.timings:
-        print(f"total: {sum(song.timings.values()):.1f} s", file=sys.stderr)
+    if song.elapsed:
+        print(f"total: {song.elapsed:.1f} s", file=sys.stderr)
 
     text = render_text(song) if args.format == "txt" else song.to_json() + "\n"
     if args.output:
@@ -154,9 +154,10 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _print_status(message: str, elapsed: float | None = None) -> None:
+def _print_status(message: str, elapsed: float | None = None, started: bool = False) -> None:
     """Progress on stderr: "tracking beats" when a stage starts, then
-    "  tracking beats: 4.2 s" when it ends."""
+    "  tracking beats: 4.2 s" when it ends. Stages can overlap, so the lines of
+    beats, chords and key may interleave."""
     if elapsed is None:
         print(message, file=sys.stderr, flush=True)
     else:
@@ -181,20 +182,30 @@ def serve_main(argv: list[str]) -> int:
 def cache_main(argv: list[str]) -> int:
     args = build_cache_parser().parse_args(argv)
     folder = _downloads_dir()
+    analyses = default_cache_dir() / "analysis"
     try:
         if args.action == "info":
-            summary = cache_summary(folder)
-            print(f"cache: {folder}\n{_describe(summary)}")
+            print(f"cache: {folder}\n{_describe(cache_summary(folder))}")
+            described = _describe_analyses(*analysis_cache.summary(analyses))
+            print(f"analysis cache: {analyses}\n{described}")
         else:
             removed = clear_cache(folder)
-            if removed.downloads == 0 and removed.size == 0:
+            removed_analyses = analysis_cache.clear(analyses)
+            if removed.size == 0 and removed_analyses[1] == 0:
                 print(f"cache is empty: {folder}")
             else:
                 print(f"removed {_describe(removed)} from {folder}")
+                if removed_analyses[1]:
+                    print(f"removed {_describe_analyses(*removed_analyses)} from {analyses}")
     except ChordChartError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return exc.exit_code
     return 0
+
+
+def _describe_analyses(count: int, size: int) -> str:
+    noun = "analysis" if count == 1 else "analyses"
+    return f"{count} {noun} ({size / 1e6:.1f} MB)"
 
 
 def _describe(summary: CacheSummary) -> str:

@@ -37,14 +37,23 @@ PowerShell splits an unquoted link at "&". Either quote it, or let chordchart as
 Full links can be pasted as-is: playlist/radio parameters (&list=, &start_radio=,
 &index=, ...) are ignored and only the video is analysed.
 
-Download cache
---------------
-Links are downloaded once and reused. Running the same link again needs no network.
-    Location:  %LOCALAPPDATA%\chordchart\cache\downloads
+Caches
+------
+Links are downloaded once and reused; running the same link again needs no network.
+The models' results are cached too, so re-analysing the same song (and section) takes
+a couple of seconds instead of the full analysis.
+    Location:  %LOCALAPPDATA%\chordchart\cache\downloads   (audio)
+               %LOCALAPPDATA%\chordchart\cache\analysis    (model results)
                (set CHORDCHART_CACHE_DIR to use another folder; --help shows the path)
-    uv run chordchart cache info       # location, number of downloads, size
-    uv run chordchart cache clear      # delete all downloads
-    uv run chordchart <link> --refresh # download that link again
+    uv run chordchart cache info       # locations, counts, sizes
+    uv run chordchart cache clear      # delete downloads and cached analyses
+    uv run chordchart <link> --refresh # download again and re-run the models
+
+Speed
+-----
+Beats, chords and key run at the same time; beat tracking uses 4 worker processes.
+A 3.5-minute song takes about 35-45 s the first time on an 8-core machine.
+`chordchart serve` keeps the models loaded between analyses.
 
 If YouTube downloads start failing, upgrade yt-dlp:
     uv lock --upgrade-package yt-dlp && uv sync

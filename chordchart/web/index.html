@@ -105,12 +105,13 @@ function showError(message) {
   errorBox.hidden = false;
 }
 
-// messages: [{text, seconds}]; seconds is filled in when a timed stage finishes.
-function showSteps(messages, running, totalSeconds) {
-  const items = messages.map((m, i) => {
+// messages: [{text, seconds, running}]. Several stages (beats, chords, key) can be
+// running at once; each shows a spinner until it finishes and gets its time.
+function showSteps(messages, jobRunning, totalSeconds) {
+  const items = messages.map((m) => {
     const li = document.createElement("li");
     li.textContent = m.seconds == null ? m.text : `${m.text} — ${m.seconds.toFixed(1)} s`;
-    if (running && i === messages.length - 1 && m.seconds == null) li.className = "current";
+    if (jobRunning && m.running) li.className = "current";
     return li;
   });
   if (totalSeconds != null) {
@@ -123,9 +124,9 @@ function showSteps(messages, running, totalSeconds) {
   steps.hidden = items.length === 0;
 }
 
+// Wall-clock total. Not the sum of the steps: some of them overlap.
 function totalOf(song) {
-  const values = Object.values((song && song.timings) || {});
-  return values.length ? values.reduce((a, b) => a + b, 0) : null;
+  return song && song.elapsed ? song.elapsed : null;
 }
 
 async function poll(jobId) {

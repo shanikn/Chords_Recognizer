@@ -43,10 +43,10 @@ def test_analysis_reports_progress_then_the_chart(sample_song):
 
     def fake_analyze(source, **kw):
         seen.update(kw, source=source)
-        kw["status"]("getting audio")
+        kw["status"]("getting audio", started=True)
         kw["status"]("downloading: My Song (3:45)")
         kw["status"]("getting audio", elapsed=3.14159)
-        kw["status"]("tracking beats")
+        kw["status"]("tracking beats", started=True)
         kw["status"]("tracking beats", elapsed=4.2)
         return sample_song
 
@@ -61,9 +61,9 @@ def test_analysis_reports_progress_then_the_chart(sample_song):
     # A finished stage gets its time on the entry it started, even when other
     # messages came in between.
     assert job["messages"] == [
-        {"text": "getting audio", "seconds": 3.14},
-        {"text": "downloading: My Song (3:45)", "seconds": None},
-        {"text": "tracking beats", "seconds": 4.2},
+        {"text": "getting audio", "seconds": 3.14, "running": False},
+        {"text": "downloading: My Song (3:45)", "seconds": None, "running": False},
+        {"text": "tracking beats", "seconds": 4.2, "running": False},
     ]
     assert job["chart"] == render_text(sample_song)
     assert job["song"]["title"] == "Test Song"
@@ -155,7 +155,7 @@ def test_jobs_run_one_at_a_time(sample_song):
     time.sleep(0.1)
     queued = client.get(f"/api/jobs/{second}").json()
     assert queued["messages"] == [
-        {"text": "waiting for the previous analysis to finish", "seconds": None}
+        {"text": "waiting for the previous analysis to finish", "seconds": None, "running": True}
     ]
     release.set()
     assert _wait(client, first)["state"] == "done"
@@ -222,3 +222,33 @@ def test_server_loads_processors_once_and_closes_them_on_shutdown(monkeypatch, s
     assert len(built) == 1  # one set for the server's lifetime
     assert len(used) == 2 and used[0] is used[1]  # reused by every analysis
     assert closed == [True]  # closed on shutdown
+
+
+def test_overlapping_stages_each_get_their_own_time(sample_song):
+    both_running = threading.Event()
+    snapshot = {}
+
+    def fake_analyze(source, **kw):
+        status = kw["status"]
+        status("tracking beats", started=True)
+        status("recognizing chords", started=True)
+        both_running.set()
+        time.sleep(0.3)  # let the test see both spinners
+        status("recognizing chords", elapsed=1.5)  # finishes first
+        status("tracking beats", elapsed=2.5)
+        return sample_song
+
+    client = _client(fake_analyze)
+    job_id = client.post("/api/analyze", json={"source": "a.mp3"}).json()["job_id"]
+    both_running.wait(2)
+    snapshot.update(client.get(f"/api/jobs/{job_id}").json())
+    job = _wait(client, job_id)
+
+    assert [(m["text"], m["running"]) for m in snapshot["messages"]] == [
+        ("tracking beats", True),
+        ("recognizing chords", True),
+    ]
+    assert job["messages"] == [
+        {"text": "tracking beats", "seconds": 2.5, "running": False},
+        {"text": "recognizing chords", "seconds": 1.5, "running": False},
+    ]

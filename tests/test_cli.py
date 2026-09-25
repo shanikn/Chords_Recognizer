@@ -149,9 +149,10 @@ def test_status_goes_to_stderr_not_stdout(monkeypatch, capsys, sample_song):
 
 def test_stage_times_and_total_go_to_stderr(monkeypatch, capsys, sample_song):
     sample_song.timings = {"download": 1.0, "beats": 4.25}
+    sample_song.elapsed = 5.2  # wall clock, not the sum of the stages
 
     def fake_analyze(source, **kw):
-        kw["status"]("tracking beats")
+        kw["status"]("tracking beats", started=True)
         kw["status"]("tracking beats", elapsed=4.25)
         return sample_song
 

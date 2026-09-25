@@ -52,8 +52,8 @@ QUEUED = "waiting for the previous analysis to finish"
 @dataclass
 class Job:
     state: str = "running"  # running | done | error
-    # Progress, oldest first: {"text": "tracking beats", "seconds": 4.21 or None}.
-    # A timed stage gets its seconds when it finishes; other messages keep None.
+    # Progress, oldest first: {"text", "seconds" (when finished), "running"}. Several
+    # stages can be running at once; plain messages are never "running".
     messages: list[dict] = field(default_factory=list)
     chart: str | None = None  # render_text(song)
     song: dict | None = None  # Song JSON
@@ -92,15 +92,24 @@ def create_app(analyze_fn: Callable | None = None) -> FastAPI:
     pending = [0]  # jobs submitted but not finished; a list so run() can update it
 
     def run(job: Job, source: str, start: float, end: float | None) -> None:
-        def status(message: str, elapsed: float | None = None) -> None:
+        with lock:  # our turn: stop the "waiting for the previous analysis" spinner
+            for entry in job.messages:
+                entry["running"] = False
+
+        def status(message: str, elapsed: float | None = None, started: bool = False) -> None:
             with lock:
                 if elapsed is not None:
+                    # Stages overlap: finish the running entry with this label.
                     for entry in reversed(job.messages):
-                        if entry["text"] == message and entry["seconds"] is None:
-                            entry["seconds"] = round(elapsed, 2)
+                        if entry["text"] == message and entry["running"]:
+                            entry["seconds"], entry["running"] = round(elapsed, 2), False
                             return
                 job.messages.append(
-                    {"text": message, "seconds": None if elapsed is None else round(elapsed, 2)}
+                    {
+                        "text": message,
+                        "seconds": None if elapsed is None else round(elapsed, 2),
+                        "running": started,
+                    }
                 )
 
         try:
@@ -151,7 +160,7 @@ def create_app(analyze_fn: Callable | None = None) -> FastAPI:
         job = Job()
         with lock:
             if pending[0]:
-                job.messages.append({"text": QUEUED, "seconds": None})
+                job.messages.append({"text": QUEUED, "seconds": None, "running": True})
             pending[0] += 1
             jobs[job_id] = job
         worker.submit(run, job, source, start, end)

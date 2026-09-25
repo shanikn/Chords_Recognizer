@@ -10,7 +10,7 @@ from chordchart.render.text import render_text
 @pytest.mark.slow
 def test_click_track_end_to_end(click_track):
     events = []
-    song = analyze(click_track, status=lambda m, elapsed=None: events.append((m, elapsed)))
+    song = analyze(click_track, status=lambda m, elapsed=None, **kw: events.append((m, elapsed)))
 
     stages = [
         "getting audio",
@@ -21,11 +21,18 @@ def test_click_track_end_to_end(click_track):
         "detecting key",
         "building chart",
     ]
-    # Each stage: announced, then reported with its time.
-    assert [m for m, _ in events] == [s for s in stages for _ in (0, 1)]
-    assert all(e is None for _, e in events[0::2])
-    assert all(e is not None and e >= 0 for _, e in events[1::2])
-    assert list(song.timings) == ["download", "models", "decode", "beats", "chords", "key", "chart"]
+    # Each stage is announced once, then reported once with its time. Beats, chords and
+    # key run at the same time, so their events may interleave in any order.
+    starts = {m: i for i, (m, e) in enumerate(events) if e is None}
+    ends = {m: i for i, (m, e) in enumerate(events) if e is not None}
+    assert len(events) == 2 * len(stages)
+    assert set(starts) == set(ends) == set(stages)
+    assert all(starts[s] < ends[s] for s in stages)
+    assert all(e >= 0 for _, e in events if e is not None)
+    models = ["tracking beats", "recognizing chords", "detecting key"]
+    assert all(ends[m] < starts["building chart"] for m in models)
+    assert set(song.timings) == {"download", "models", "decode", "beats", "chords", "key", "chart"}
+    assert song.elapsed > 0
     assert song.timings["beats"] > 0
     assert song.title == "click_120_4-4"
     assert song.bpm == pytest.approx(120, abs=2)

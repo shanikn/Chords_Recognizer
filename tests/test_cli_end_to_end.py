@@ -35,4 +35,6 @@ def test_real_youtube_link(capsys, tmp_path, monkeypatch):
     captured = capsys.readouterr()
     assert code == 0, captured.err
     assert captured.out.splitlines()[0] == "Me at the zoo"
-    assert captured.err.startswith("downloading: Me at the zoo (0:19)")
+    # Stage lines (with times) surround the download message; only its presence matters.
+    assert "downloading: Me at the zoo (0:19)\n" in captured.err
+    assert "\ntotal: " in captured.err

@@ -8,6 +8,15 @@ from scipy.io import wavfile
 from chordchart.model import Bar, ChordEvent, Key, Song
 
 
+@pytest.fixture(autouse=True)
+def isolated_cache(monkeypatch, tmp_path_factory):
+    """Every test gets its own cache root, so nothing reads or writes the real
+    %LOCALAPPDATA%\\chordchart cache (downloads or cached analyses)."""
+    root = tmp_path_factory.mktemp("cache")
+    monkeypatch.setenv("CHORDCHART_CACHE_DIR", str(root))
+    return root
+
+
 @pytest.fixture(scope="session")
 def make_audio(tmp_path_factory):
     """Generate a test audio file with ffmpeg's built-in signal sources (lavfi)."""
