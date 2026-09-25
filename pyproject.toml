@@ -9,6 +9,10 @@ dependencies = [
     # Capped: madmom calls np.maximum(x, 0, out) positionally, deprecated in NumPy 2.5
     # and due to become an error. See spec §2.1 for the two ways to lift the cap.
     "numpy>=2.0,<2.6",
+    # `deno` ships a JavaScript runtime, which YouTube extraction needs, so nothing
+    # depends on a system deno/node. YouTube breaks often; to upgrade:
+    #   uv lock --upgrade-package yt-dlp && uv sync
+    "yt-dlp[default,deno]>=2026.8.19",
 ]
 
 [project.scripts]
@@ -32,8 +36,9 @@ testpaths = ["tests"]
 markers = [
     "slow: runs madmom models on generated audio (seconds per test)",
     "accuracy: needs locally stored annotated audio",
+    "network: talks to YouTube; run explicitly with -m network",
 ]
-addopts = "-rs -m 'not slow and not accuracy'"
+addopts = "-rs -m 'not slow and not accuracy and not network'"
 # Any warning raised from madmom code fails the test run (spec §2.1), except the one
 # known deprecation below. Later entries take precedence over earlier ones.
 filterwarnings = [

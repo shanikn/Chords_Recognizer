@@ -19,3 +19,28 @@ class AudioDecodeError(ChordChartError):
 
 class AudioRejectedError(ChordChartError):
     exit_code = 2
+
+
+# Link errors (download.py). One class per thing the user can do something about.
+
+
+class InvalidLinkError(ChordChartError):
+    """Unsupported site, malformed link, playlist/feed page or live stream."""
+
+    exit_code = 2
+
+
+class VideoUnavailableError(ChordChartError):
+    """Private, removed, age-restricted, geo-blocked or sign-in required."""
+
+    exit_code = 2
+
+
+class NetworkError(ChordChartError):
+    exit_code = 2
+
+
+class DownloadFailedError(ChordChartError):
+    """Anything else yt-dlp reports, usually fixed by upgrading yt-dlp."""
+
+    exit_code = 2
