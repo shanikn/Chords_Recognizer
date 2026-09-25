@@ -3,6 +3,7 @@
 chordchart <file-or-link> [--start T] [--end T] [--format txt|json] [-o FILE] ...
 chordchart                  prompts for the link, then start/end
 chordchart --clipboard      reads the link from the clipboard
+chordchart serve [--port N]  local web page
 chordchart cache info | clear
 """
 
@@ -96,8 +97,11 @@ def build_cache_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    if argv[:1] == ["cache"]:  # a file literally named "cache" can be passed as ./cache
+    # Subcommands. A file literally named "cache" or "serve" can be passed as ./cache.
+    if argv[:1] == ["cache"]:
         return cache_main(argv[1:])
+    if argv[:1] == ["serve"]:
+        return serve_main(argv[1:])
 
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -146,6 +150,21 @@ def main(argv: list[str] | None = None) -> int:
             sys.stdout.reconfigure(errors="replace")
         sys.stdout.write(text)
     return 0
+
+
+def serve_main(argv: list[str]) -> int:
+    from chordchart.web import server  # FastAPI is only imported when serving
+
+    parser = argparse.ArgumentParser(
+        prog="chordchart serve",
+        description="Open the ChordChart web page (runs on this computer only).",
+    )
+    parser.add_argument("--port", type=int, default=server.DEFAULT_PORT)
+    parser.add_argument(
+        "--no-browser", action="store_true", help="don't open the page automatically"
+    )
+    args = parser.parse_args(argv)
+    return server.serve(port=args.port, open_browser=not args.no_browser)
 
 
 def cache_main(argv: list[str]) -> int:

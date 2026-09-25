@@ -9,8 +9,16 @@ from chordchart.render.text import render_text
 
 @pytest.mark.slow
 def test_click_track_end_to_end(click_track):
-    song = analyze(click_track)
+    messages = []
+    song = analyze(click_track, status=messages.append)
 
+    assert messages == [
+        "reading audio",
+        "tracking beats",
+        "recognizing chords",
+        "detecting key",
+        "building chart",
+    ]
     assert song.title == "click_120_4-4"
     assert song.bpm == pytest.approx(120, abs=2)
     assert song.meter == 4

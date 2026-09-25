@@ -52,9 +52,11 @@ def analyze(
     )
     recognizer = recognizer or MadmomCRFRecognizer()
     has_section = start > 0 or end is not None
+    say = status or (lambda message: None)
 
     with tempfile.TemporaryDirectory(prefix="chordchart-", ignore_cleanup_errors=True) as tmp:
         wav = Path(tmp) / "audio.wav"
+        say("reading audio")
         decoded = decode_section(
             resolved.path,
             wav,
@@ -63,10 +65,14 @@ def analyze(
             pad=SECTION_PAD if has_section else 0.0,
             max_duration=max_duration,
         )
+        say("tracking beats")
         beats = track_beats(wav, beats_per_bar)
+        say("recognizing chords")
         segments = recognizer.recognize(wav)
+        say("detecting key")
         key = detect_key(wav)
 
+    say("building chart")
     beats, segments = _shift(beats, segments, decoded.offset)
     audio_end = decoded.offset + decoded.duration
     chart_start, chart_end = _bar_range(beats, start, end, decoded.offset, audio_end)

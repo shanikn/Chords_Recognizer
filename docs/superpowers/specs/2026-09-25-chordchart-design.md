@@ -130,6 +130,8 @@ chordchart/
   cli.py          chordchart <url|file> [--start T] [--end T] [--format ...] [-o FILE]
                   chordchart cache info | clear
   annotate/       .lab annotation helper (§6)
+  interactive.py  prompts for link/start/end when no source is given; --clipboard
+  web/            chordchart serve: FastAPI server.py + one index.html (see M8)
 evaluate/
   songs/<slug>/   chords.lab, beats.txt, meta.toml   (committed)
   audio/          <slug>.<ext>                        (gitignored)
@@ -423,5 +425,16 @@ beat tracking and DBN decoding in M2, why smoothing is needed in M5.
    (c) vendoring the BTC model.
 8. **Web UI:** FastAPI (`POST /analyze` with URL or upload → `Song` JSON) + React/Vite
    chart view. This gets a short design pass of its own before implementation.
+   **Already built early (after M3), at the user's request:** `chordchart serve`
+   (`chordchart/web/`).
+   - FastAPI with one vanilla-JS page, bound to 127.0.0.1.
+   - API: `POST /api/analyze` → job id, then the page polls `GET /api/jobs/{id}` for
+     progress messages and the chart text and `Song` JSON.
+   - One analysis at a time.
+   - Safety: a Host allow-list against DNS rebinding, and JSON-only POSTs so other
+     sites can't trigger analyses.
+
+   M8 keeps this API and replaces the page with React, adding file upload and a
+   bar-grid chart view.
 9. **Stretch:** transpose button, and capo suggestion (the capo position that
    minimises barre chords in the transposed chart).

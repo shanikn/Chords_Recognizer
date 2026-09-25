@@ -13,13 +13,16 @@ dependencies = [
     # depends on a system deno/node. YouTube breaks often; to upgrade:
     #   uv lock --upgrade-package yt-dlp && uv sync
     "yt-dlp[default,deno]>=2026.8.19",
+    # `chordchart serve`: local web UI
+    "fastapi>=0.141",
+    "uvicorn>=0.54",
 ]
 
 [project.scripts]
 chordchart = "chordchart.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6", "scipy>=1.13"]
+dev = ["httpx2>=2.13", "pytest>=8", "ruff>=0.6", "scipy>=1.13"]
 
 [build-system]
 requires = ["hatchling"]
