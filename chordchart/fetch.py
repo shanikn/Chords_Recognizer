@@ -13,6 +13,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import wave
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -33,6 +34,12 @@ def find_ffmpeg() -> str:
     return path
 
 
+@dataclass(frozen=True)
+class Decoded:
+    offset: float  # source time of the WAV's first sample
+    duration: float  # length of the WAV in seconds, padding included
+
+
 def decode_to_wav(
     src: Path,
     dst: Path,
@@ -40,10 +47,25 @@ def decode_to_wav(
     start: float = 0.0,
     end: float | None = None,
 ) -> float:
-    """Decode `src` into a standard WAV at `dst` and return its duration in seconds.
+    """Decode `src` (or its `start`-`end` section) to a standard WAV; return its duration."""
+    return decode_section(src, dst, start=start, end=end, max_duration=max_duration).duration
 
-    `start`/`end` (seconds in the source) select a section. ffmpeg seeks in the input,
-    so the rest of the file is never decoded.
+
+def decode_section(
+    src: Path,
+    dst: Path,
+    *,
+    start: float = 0.0,
+    end: float | None = None,
+    pad: float = 0.0,
+    max_duration: float = DEFAULT_MAX_DURATION,
+) -> Decoded:
+    """Decode the `start`-`end` section of `src`, plus up to `pad` seconds on each side.
+
+    ffmpeg seeks in the input, so the rest of the file is never decoded. The padding
+    gives the models context at the edges and lets the pipeline widen the section to
+    whole bars. The checks (past the end, too short, too long) apply to the section
+    that was *requested*, not to the padded audio.
     """
     src, dst = Path(src), Path(dst)
     if not src.is_file():
@@ -52,11 +74,38 @@ def decode_to_wav(
         raise AudioRejectedError(
             f"--end must be after --start (got {format_time(start)} to {format_time(end)})"
         )
+    offset = max(0.0, start - pad)
+    stop = None if end is None else end + pad
+    samples = _ffmpeg_decode(src, dst, offset, stop, limit=max_duration + 2 * pad + 1)
+
+    duration = len(samples) / SAMPLE_RATE
+    audio_end = offset + duration
+    requested = min(audio_end, end if end is not None else audio_end) - start
+    if requested <= 0 and start > 0:
+        raise AudioRejectedError(f"--start {format_time(start)} is past the end of the audio")
+    if requested > max_duration:
+        raise AudioRejectedError(
+            f"audio is longer than {max_duration / 60:g} min; "
+            "raise --max-duration to analyse it anyway"
+        )
+    if requested < MIN_DURATION:
+        what = "the selected section" if start > 0 or end is not None else "audio"
+        raise AudioRejectedError(
+            f"{what} is only {max(requested, 0):.1f} s long; need at least {MIN_DURATION:.0f} s"
+        )
+    if float(np.sqrt(np.mean(samples**2))) < SILENCE_RMS:
+        raise AudioRejectedError("audio is silent")
+    return Decoded(offset=offset, duration=duration)
+
+
+def _ffmpeg_decode(
+    src: Path, dst: Path, offset: float, stop: float | None, limit: float
+) -> np.ndarray:
     section = []
-    if start > 0:
-        section += ["-ss", f"{start:.3f}"]
-    if end is not None:
-        section += ["-to", f"{end:.3f}"]  # an input option, so an absolute source time
+    if offset > 0:
+        section += ["-ss", f"{offset:.3f}"]
+    if stop is not None:
+        section += ["-to", f"{stop:.3f}"]  # an input option, so an absolute source time
     cmd = [
         find_ffmpeg(),
         "-nostdin",
@@ -76,30 +125,13 @@ def decode_to_wav(
         "pcm_s16le",
         # Stop just past the limit, so a 3-hour file isn't decoded only to be rejected.
         "-t",
-        f"{max_duration + 1:.3f}",
+        f"{limit:.3f}",
         str(dst),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if result.returncode != 0:
         raise AudioDecodeError(f"ffmpeg could not decode {src.name}: {result.stderr.strip()}")
-
-    samples = read_wav(dst)
-    duration = len(samples) / SAMPLE_RATE
-    if duration == 0 and start > 0:
-        raise AudioRejectedError(f"--start {format_time(start)} is past the end of the audio")
-    if duration > max_duration:
-        raise AudioRejectedError(
-            f"audio is longer than {max_duration / 60:g} min; "
-            "raise --max-duration to analyse it anyway"
-        )
-    if duration < MIN_DURATION:
-        what = "the selected section" if start > 0 or end is not None else "audio"
-        raise AudioRejectedError(
-            f"{what} is only {duration:.1f} s long; need at least {MIN_DURATION:.0f} s"
-        )
-    if float(np.sqrt(np.mean(samples**2))) < SILENCE_RMS:
-        raise AudioRejectedError("audio is silent")
-    return duration
+    return read_wav(dst)
 
 
 def read_wav(path: Path) -> np.ndarray:

@@ -12,7 +12,7 @@ from pathlib import Path
 
 from chordchart.beats import Beats, track_beats
 from chordchart.errors import AudioRejectedError
-from chordchart.fetch import DEFAULT_MAX_DURATION, decode_to_wav
+from chordchart.fetch import DEFAULT_MAX_DURATION, decode_section
 from chordchart.key import detect_key
 from chordchart.model import Segment, Song
 from chordchart.postprocess import PostprocessOptions, beat_sync, group_bars, labels_to_segments
@@ -21,6 +21,8 @@ from chordchart.recognizers.madmom_crf import MadmomCRFRecognizer
 from chordchart.sources import resolve_source
 
 MIN_BARS = 2
+SECTION_PAD = 5.0  # seconds; at least one 4/4 bar at the DBN's slowest tempo (55 BPM)
+BAR_TOLERANCE = 0.1  # a downbeat this close to --start/--end counts as on it
 
 
 def analyze(
@@ -37,21 +39,38 @@ def analyze(
 ) -> Song:
     """Analyse `source` (a path or an http(s) link), or just its `start`-`end` section.
 
-    The models only see the section, so their times start at 0. They are shifted by
-    `start` straight away, and every time in the returned Song is absolute.
-    `refresh` re-downloads a cached link. `status` receives one-line progress messages.
+    A section is widened to whole bars: the models get SECTION_PAD seconds of extra
+    audio on each side, and the chart runs from the last downbeat at or before `start`
+    to the first downbeat at or after `end`. So a mid-bar `--start` never produces a
+    partial first bar that looks like a pickup. The models' times start at 0; they're
+    shifted onto the source's timeline straight away, and every time in the returned
+    Song is absolute. `refresh` re-downloads a cached link. `status` receives one-line
+    progress messages.
     """
     resolved = resolve_source(
         str(source), max_duration=max_duration, refresh=refresh, status=status
     )
     recognizer = recognizer or MadmomCRFRecognizer()
+    has_section = start > 0 or end is not None
 
     with tempfile.TemporaryDirectory(prefix="chordchart-", ignore_cleanup_errors=True) as tmp:
         wav = Path(tmp) / "audio.wav"
-        duration = decode_to_wav(resolved.path, wav, max_duration, start=start, end=end)
+        decoded = decode_section(
+            resolved.path,
+            wav,
+            start=start,
+            end=end,
+            pad=SECTION_PAD if has_section else 0.0,
+            max_duration=max_duration,
+        )
         beats = track_beats(wav, beats_per_bar)
         segments = recognizer.recognize(wav)
         key = detect_key(wav)
+
+    beats, segments = _shift(beats, segments, decoded.offset)
+    audio_end = decoded.offset + decoded.duration
+    chart_start, chart_end = _bar_range(beats, start, end, decoded.offset, audio_end)
+    beats, segments = _trim(beats, segments, chart_start, chart_end)
 
     if sum(p == 1 for p in beats.positions) < MIN_BARS:
         # Milestone 5 replaces this with a time-based fallback layout (spec §8).
@@ -59,10 +78,10 @@ def analyze(
             f"could not find a steady beat (fewer than {MIN_BARS} bars detected)"
         )
 
-    beats, segments = _shift(beats, segments, start)
-    end_time = start + duration
-    labels = beat_sync(segments, beats.times, end_time)
-    bars = group_bars(beats, labels, end_time, options)
+    labels = beat_sync(segments, beats.times, chart_end)
+    bars = group_bars(beats, labels, chart_end, options)
+    end_time = chart_end
+    duration = chart_end - chart_start
 
     warnings = []
     if beats.meter == 2:
@@ -77,13 +96,51 @@ def analyze(
         meter=beats.meter,
         bars=bars,
         warnings=warnings,
-        section_start=start,
-        section_end=end,
+        section_start=chart_start if has_section else 0.0,
+        section_end=chart_end if end is not None else None,
+        requested_start=start if has_section else None,
+        requested_end=end,
         debug={
             "raw": segments,
             "beat_sync": labels_to_segments(beats.times, labels, end_time),
         },
     )
+
+
+def _bar_range(
+    beats: Beats, start: float, end: float | None, audio_start: float, audio_end: float
+) -> tuple[float, float]:
+    """The chart's range: from the last downbeat at or before `start` to the first
+    downbeat at or after `end`. Without a section, or with no downbeat on that side
+    (e.g. `start` within the song's first bar), use the edge of the decoded audio."""
+    downbeats = [t for t, p in zip(beats.times, beats.positions, strict=True) if p == 1]
+    lo, hi = audio_start, audio_end
+    if start > 0:
+        before = [t for t in downbeats if t <= start + BAR_TOLERANCE]
+        lo = before[-1] if before else audio_start
+    if end is not None:
+        after = [t for t in downbeats if t >= end - BAR_TOLERANCE]
+        hi = after[0] if after else audio_end
+    return lo, hi
+
+
+def _trim(
+    beats: Beats, segments: list[Segment], lo: float, hi: float
+) -> tuple[Beats, list[Segment]]:
+    """Keep beats in [lo, hi) and clip segments to [lo, hi]. The downbeat at `hi`
+    starts the next bar, so it's excluded."""
+    keep = [i for i, t in enumerate(beats.times) if lo - 1e-6 <= t < hi - 1e-6]
+    trimmed = replace(
+        beats,
+        times=[beats.times[i] for i in keep],
+        positions=[beats.positions[i] for i in keep],
+    )
+    clipped = [
+        Segment(max(s.start, lo), min(s.end, hi), s.label)
+        for s in segments
+        if s.end > lo and s.start < hi
+    ]
+    return trimmed, clipped
 
 
 def _shift(beats: Beats, segments: list[Segment], offset: float) -> tuple[Beats, list[Segment]]:

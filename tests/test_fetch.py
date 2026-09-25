@@ -3,7 +3,7 @@ import wave
 import pytest
 
 from chordchart.errors import AudioDecodeError, AudioRejectedError, FfmpegNotFoundError
-from chordchart.fetch import SAMPLE_RATE, decode_to_wav, read_wav
+from chordchart.fetch import SAMPLE_RATE, decode_section, decode_to_wav, read_wav
 from chordchart.timecode import format_time, parse_time
 
 
@@ -133,3 +133,26 @@ def test_section_end_must_follow_start(tone_20s, tmp_path):
 def test_short_section_names_the_section(tone_20s, tmp_path):
     with pytest.raises(AudioRejectedError, match="selected section is only 3.0 s long"):
         decode_to_wav(tone_20s, tmp_path / "o.wav", start=2, end=5)
+
+
+def test_padded_section_reports_where_the_audio_starts(tone_20s, tmp_path):
+    got = decode_section(tone_20s, tmp_path / "o.wav", start=8, end=14, pad=5)
+    assert got.offset == 3.0
+    assert got.duration == pytest.approx(16.0, abs=0.05)  # 3 s .. 19 s
+
+
+def test_padding_is_clamped_to_the_file(tone_20s, tmp_path):
+    got = decode_section(tone_20s, tmp_path / "o.wav", start=2, end=18, pad=5)
+    assert got.offset == 0.0
+    assert got.duration == pytest.approx(20.0, abs=0.05)
+
+
+def test_padding_does_not_hide_a_start_past_the_end(tone_20s, tmp_path):
+    # The padding (19-22 s) still contains a second of audio; the request doesn't.
+    with pytest.raises(AudioRejectedError, match="--start 0:22 is past the end"):
+        decode_section(tone_20s, tmp_path / "o.wav", start=22, pad=5)
+
+
+def test_padding_does_not_rescue_a_short_section(tone_20s, tmp_path):
+    with pytest.raises(AudioRejectedError, match="selected section is only 3.0 s long"):
+        decode_section(tone_20s, tmp_path / "o.wav", start=8, end=11, pad=5)

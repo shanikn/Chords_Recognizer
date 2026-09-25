@@ -164,8 +164,15 @@ and capo) works from `Song`. Transpose and capo are pure functions on symbols.
      than `--max-duration`.
 
    A local path is used as-is. ffmpeg decodes to 44.1 kHz mono 16-bit PCM WAV,
-   optionally only the `--start`/`--end` section. All `Song` times are absolute in the
-   source. Caching *analysis* results (beats, raw chords, keyed by audio sha256) moved
+   optionally only the `--start`/`--end` section. A section is widened to **whole bars**:
+   - 5 s of extra audio is decoded on each side, for model context;
+   - the chart runs from the last downbeat at or before `--start` to the first downbeat
+     at or after `--end`;
+   - `Song.requested_start/end` keep the original request, and the header shows both
+     ranges when they differ (`Section: 0:04-0:16 (requested 0:05-0:15)`);
+   - a pickup bar 0 only occurs at the real start of a song.
+
+   All `Song` times are absolute in the source. Caching *analysis* results (beats, raw chords, keyed by audio sha256) moved
    to M5, where the eval sweeps benefit.
 2. **beats:** downbeat tracking gives beat times and each beat's position in the bar.
    BPM = 60 / median inter-beat interval. Meter = the most common bar length.

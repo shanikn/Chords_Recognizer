@@ -57,10 +57,14 @@ class Song:
     meter: int  # beats per bar
     bars: list[Bar]
     warnings: list[str] = field(default_factory=list)
-    # The analysed section of the source, in seconds. All times in the Song (bars,
-    # chords, debug segments) are absolute, measured from the start of the source.
+    # The analysed section of the source, in seconds, widened to whole bars. All times
+    # in the Song (bars, chords, debug segments) are absolute, measured from the start
+    # of the source.
     section_start: float = 0.0
     section_end: float | None = None  # None = to the end of the source
+    # What the user asked for (--start/--end), before widening. None = no section.
+    requested_start: float | None = None
+    requested_end: float | None = None
     # Intermediate chord sequences, per pipeline stage, for the eval harness (spec §7).
     debug: dict[str, list[Segment]] = field(default_factory=dict)
 
