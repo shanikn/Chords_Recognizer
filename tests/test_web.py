@@ -192,3 +192,33 @@ def test_serve_port_in_use_is_one_line(monkeypatch, capsys):
     assert capsys.readouterr().err == (
         "error: port 9000 is already in use; try: chordchart serve --port 9001\n"
     )
+
+
+def test_server_loads_processors_once_and_closes_them_on_shutdown(monkeypatch, sample_song):
+    import chordchart.pipeline
+    import chordchart.processors
+
+    built, closed, used = [], [], []
+
+    class FakeProcessors:
+        def __init__(self, **kwargs):
+            built.append(kwargs)
+
+        def close(self):
+            closed.append(True)
+
+    def fake_analyze(source, **kw):
+        used.append(kw["processors"])
+        return sample_song
+
+    monkeypatch.setattr(chordchart.processors, "Processors", FakeProcessors)
+    monkeypatch.setattr(chordchart.pipeline, "analyze", fake_analyze)
+
+    app = create_app()  # the real wiring, with the heavy parts replaced
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        for source in ("a.mp3", "b.mp3"):
+            _wait(client, client.post("/api/analyze", json={"source": source}).json()["job_id"])
+        assert closed == []
+    assert len(built) == 1  # one set for the server's lifetime
+    assert len(used) == 2 and used[0] is used[1]  # reused by every analysis
+    assert closed == [True]  # closed on shutdown

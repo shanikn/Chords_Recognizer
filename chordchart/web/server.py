@@ -26,7 +26,8 @@ import threading
 import uuid
 import webbrowser
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -60,15 +61,34 @@ class Job:
 
 
 def create_app(analyze_fn: Callable | None = None) -> FastAPI:
-    """The app. `analyze_fn` defaults to pipeline.analyze; tests pass a fake."""
+    """The app. `analyze_fn` defaults to pipeline.analyze with one set of processors
+    kept loaded for the server's lifetime; tests pass a fake instead."""
+    worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="chordchart-job")
+    loaded: Future | None = None
     if analyze_fn is None:
-        from chordchart.pipeline import analyze as analyze_fn
+        from chordchart.pipeline import DEFAULT_THREADS, analyze
+        from chordchart.processors import Processors
 
-    app = FastAPI(title="ChordChart", docs_url=None, redoc_url=None, openapi_url=None)
+        # Built on the worker, so the page is up at once and the first analysis
+        # simply queues behind the model loading.
+        loaded = worker.submit(Processors, num_threads=DEFAULT_THREADS)
+
+        def analyze_fn(source: str, **kwargs):
+            return analyze(source, processors=loaded.result(), **kwargs)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        yield
+        worker.shutdown(wait=False, cancel_futures=True)
+        if loaded is not None and loaded.done() and loaded.exception() is None:
+            loaded.result().close()  # shuts madmom's worker pools down
+
+    app = FastAPI(
+        title="ChordChart", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
+    )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=[HOST, "localhost"])
     jobs: dict[str, Job] = {}
     lock = threading.Lock()
-    worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="chordchart-job")
     pending = [0]  # jobs submitted but not finished; a list so run() can update it
 
     def run(job: Job, source: str, start: float, end: float | None) -> None:

@@ -26,21 +26,33 @@ chord) = 25 labels.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+from chordchart.fetch import model_input
 from chordchart.model import Segment
+
+if TYPE_CHECKING:
+    from chordchart.processors import Processors
 
 
 class MadmomCRFRecognizer:
     name = "madmom-crf"
+    accepts_signal = True  # recognize() also takes an in-memory madmom Signal
+
+    def __init__(self, processors: Processors | None = None) -> None:
+        self.processors = processors  # reused if given; otherwise built per call
 
     def recognize(self, wav_path: Path) -> list[Segment]:
-        from madmom.features.chords import (
-            CNNChordFeatureProcessor,
-            CRFChordRecognitionProcessor,
-        )
+        if self.processors is not None:
+            cnn, crf = self.processors.chord_features, self.processors.chord_crf
+        else:
+            from madmom.features.chords import (
+                CNNChordFeatureProcessor,
+                CRFChordRecognitionProcessor,
+            )
 
-        features = CNNChordFeatureProcessor()(str(wav_path))
-        rows = CRFChordRecognitionProcessor()(features)
+            cnn, crf = CNNChordFeatureProcessor(), CRFChordRecognitionProcessor()
+        rows = crf(cnn(model_input(wav_path)))
         return [
             Segment(float(start), float(end), str(label))
             for start, end, label in zip(rows["start"], rows["end"], rows["label"], strict=True)

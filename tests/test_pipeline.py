@@ -14,6 +14,7 @@ def test_click_track_end_to_end(click_track):
 
     stages = [
         "getting audio",
+        "loading models",  # no processors passed in, so analyze() builds its own
         "reading audio",
         "tracking beats",
         "recognizing chords",
@@ -24,7 +25,7 @@ def test_click_track_end_to_end(click_track):
     assert [m for m, _ in events] == [s for s in stages for _ in (0, 1)]
     assert all(e is None for _, e in events[0::2])
     assert all(e is not None and e >= 0 for _, e in events[1::2])
-    assert list(song.timings) == ["download", "decode", "beats", "chords", "key", "chart"]
+    assert list(song.timings) == ["download", "models", "decode", "beats", "chords", "key", "chart"]
     assert song.timings["beats"] > 0
     assert song.title == "click_120_4-4"
     assert song.bpm == pytest.approx(120, abs=2)

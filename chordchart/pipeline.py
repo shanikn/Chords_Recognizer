@@ -5,25 +5,33 @@ resolve (download) -> decode -> beats -> chords -> key -> beat_sync -> group_bar
 
 from __future__ import annotations
 
+import os
 import tempfile
 import time
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import replace
+from functools import partial
 from pathlib import Path
 
 from chordchart.beats import Beats, track_beats
 from chordchart.errors import AudioRejectedError
-from chordchart.fetch import DEFAULT_MAX_DURATION, decode_section
+from chordchart.fetch import DEFAULT_MAX_DURATION, decode_section, load_signal
 from chordchart.key import detect_key
 from chordchart.model import Segment, Song
 from chordchart.postprocess import PostprocessOptions, beat_sync, group_bars, labels_to_segments
+from chordchart.processors import Processors
 from chordchart.recognizers.base import ChordRecognizer
 from chordchart.recognizers.madmom_crf import MadmomCRFRecognizer
-from chordchart.sources import resolve_source
+from chordchart.sources import ResolvedSource, resolve_source
 
 # status(message) or status(label, elapsed=seconds) when a timed stage ends.
 Status = Callable[..., None]
+
+# Worker processes for madmom's parallel paths (the downbeat RNN ensemble and the
+# 3/4-vs-4/4 DBN). Benchmarked 2026-09-25 on 8 cores: 4 makes beat tracking 1.8-2.3x
+# faster with bit-identical output; 8 oversubscribes the CPU and slows chords/key down.
+DEFAULT_THREADS = max(1, min(4, os.cpu_count() or 1))
 
 MIN_BARS = 2
 SECTION_PAD = 5.0  # seconds; at least one 4/4 bar at the DBN's slowest tempo (55 BPM)
@@ -41,6 +49,7 @@ def analyze(
     end: float | None = None,
     refresh: bool = False,
     status: Status | None = None,
+    processors: Processors | None = None,
 ) -> Song:
     """Analyse `source` (a path or an http(s) link), or just its `start`-`end` section.
 
@@ -54,8 +63,10 @@ def analyze(
     `status(message)` receives one-line progress messages. Each timed stage is
     announced twice: `status(label)` when it starts and `status(label, elapsed=secs)`
     when it ends. The seconds per stage are also returned in `Song.timings`.
+
+    `processors` (see processors.py) are reused if given, e.g. by the server, which
+    keeps one set loaded. Otherwise a set is built for this call and closed after it.
     """
-    has_section = start > 0 or end is not None
     timings: dict[str, float] = {}
     stage = _Stages(status, timings)
 
@@ -63,7 +74,41 @@ def analyze(
         resolved = resolve_source(
             str(source), max_duration=max_duration, refresh=refresh, status=status
         )
-    recognizer = recognizer or MadmomCRFRecognizer()
+    run = partial(
+        _analyze,
+        resolved,
+        stage=stage,
+        timings=timings,
+        max_duration=max_duration,
+        recognizer=recognizer,
+        options=options,
+        beats_per_bar=beats_per_bar,
+        start=start,
+        end=end,
+    )
+    if processors is not None:
+        return run(processors)
+    with stage("loading models", "models"):
+        owned = Processors(beats_per_bar, num_threads=DEFAULT_THREADS)
+    with owned:
+        return run(owned)
+
+
+def _analyze(
+    resolved: ResolvedSource,
+    processors: Processors,
+    *,
+    stage: _Stages,
+    timings: dict[str, float],
+    max_duration: float,
+    recognizer: ChordRecognizer | None,
+    options: PostprocessOptions | None,
+    beats_per_bar: Sequence[int],
+    start: float,
+    end: float | None,
+) -> Song:
+    has_section = start > 0 or end is not None
+    recognizer = recognizer or MadmomCRFRecognizer(processors)
 
     with tempfile.TemporaryDirectory(prefix="chordchart-", ignore_cleanup_errors=True) as tmp:
         wav = Path(tmp) / "audio.wav"
@@ -76,12 +121,15 @@ def analyze(
                 pad=SECTION_PAD if has_section else 0.0,
                 max_duration=max_duration,
             )
+            audio = load_signal(wav)  # in memory: see load_signal for why
         with stage("tracking beats", "beats"):
-            beats = track_beats(wav, beats_per_bar)
+            beats = track_beats(audio, beats_per_bar, processors)
         with stage("recognizing chords", "chords"):
-            segments = recognizer.recognize(wav)
+            segments = recognizer.recognize(
+                audio if getattr(recognizer, "accepts_signal", False) else wav
+            )
         with stage("detecting key", "key"):
-            key = detect_key(wav)
+            key = detect_key(audio, processors)
 
     with stage("building chart", "chart"):
         beats, segments = _shift(beats, segments, decoded.offset)

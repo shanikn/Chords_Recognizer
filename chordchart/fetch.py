@@ -136,6 +136,29 @@ def _ffmpeg_decode(
 
 def read_wav(path: Path) -> np.ndarray:
     """Read a mono 16-bit WAV (as written by decode_to_wav) as float32 in [-1, 1]."""
+    return _read_int16(path).astype(np.float32) / 32768.0
+
+
+def load_signal(path: Path):
+    """The WAV as a madmom Signal, in memory, for the models.
+
+    madmom can read the file itself, but it memory-maps it
+    (`scipy.io.wavfile.read(mmap=True)`). Processors that are kept and reused (the
+    server) hold on to the last input, so the file would stay open and locked on
+    Windows. Loading it here gives the models exactly the same int16 samples, and the
+    file is closed as soon as this returns. It's also read once instead of three times.
+    """
+    from madmom.audio.signal import Signal
+
+    return Signal(_read_int16(path), sample_rate=SAMPLE_RATE, num_channels=1)
+
+
+def model_input(audio):
+    """What to hand a madmom processor: a loaded Signal as-is, a path as a string."""
+    return str(audio) if isinstance(audio, str | Path) else audio
+
+
+def _read_int16(path: Path) -> np.ndarray:
     with wave.open(str(path), "rb") as f:
         frames = f.readframes(f.getnframes())
-    return np.frombuffer(frames, dtype="<i2").astype(np.float32) / 32768.0
+    return np.frombuffer(frames, dtype="<i2").copy()

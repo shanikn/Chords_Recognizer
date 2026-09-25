@@ -28,8 +28,14 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+from chordchart.fetch import model_input
+
+if TYPE_CHECKING:
+    from chordchart.processors import Processors
 
 FPS = 100  # frames per second of the RNN activations
 
@@ -42,11 +48,21 @@ class Beats:
     meter: int  # beats per bar
 
 
-def track_beats(wav_path: Path, beats_per_bar: Sequence[int] = (3, 4)) -> Beats:
-    from madmom.features.downbeats import DBNDownBeatTrackingProcessor, RNNDownBeatProcessor
+def track_beats(
+    wav_path: Path,
+    beats_per_bar: Sequence[int] = (3, 4),
+    processors: Processors | None = None,
+) -> Beats:
+    """Beats and downbeats. Reuses `processors` if given (and built for the same
+    `beats_per_bar`); otherwise builds single-threaded processors for this call."""
+    if processors is not None and processors.beats_per_bar == tuple(beats_per_bar):
+        rnn, tracker = processors.downbeat_rnn, processors.downbeat_dbn
+    else:
+        from madmom.features.downbeats import DBNDownBeatTrackingProcessor, RNNDownBeatProcessor
 
-    activations = RNNDownBeatProcessor()(str(wav_path))
-    tracker = DBNDownBeatTrackingProcessor(beats_per_bar=list(beats_per_bar), fps=FPS)
+        rnn = RNNDownBeatProcessor()
+        tracker = DBNDownBeatTrackingProcessor(beats_per_bar=list(beats_per_bar), fps=FPS)
+    activations = rnn(model_input(wav_path))
     tracked = np.asarray(tracker(activations)).reshape(-1, 2)
     times = [float(t) for t in tracked[:, 0]]
     positions = [int(p) for p in tracked[:, 1]]
