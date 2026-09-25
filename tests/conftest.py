@@ -85,3 +85,50 @@ def sample_song():
             bar(5, 8.0, (0, "G", "G:maj")),
         ],
     )
+
+
+# Root-position triads (Hz) in a low guitar register.
+TRIADS = {
+    "C": (130.8, 164.8, 196.0),
+    "G": (98.0, 123.5, 146.8),
+    "Am": (110.0, 130.8, 164.8),
+    "F": (87.3, 110.0, 130.8),
+}
+# | C | G | Am | F  C |, played twice. Entries are (chord, start beat, length in beats).
+EARLY_STRUM_PROGRESSION = [("C", 0, 4), ("G", 4, 4), ("Am", 8, 4), ("F", 12, 2), ("C", 14, 2)]
+EARLY_STRUM_PROGRESSION += [(c, s + 16, d) for c, s, d in EARLY_STRUM_PROGRESSION]
+
+
+def write_progression(path, progression, bpm=100.0, anticipation=0.5, beats_per_bar=4, sr=44_100):
+    """Synthesize chords over an accented pulse.
+
+    Each chord is 5 harmonics per note with a decaying envelope, so it sounds enough
+    like an instrument for the model (pure sines come out as "N"). Every chord starts
+    `anticipation` beats early, like a player strumming ahead of the beat.
+    """
+    beat = 60.0 / bpm
+    total_beats = max(s + d for _, s, d in progression)
+    n = int((total_beats * beat + 1.0) * sr)
+    t = np.arange(n) / sr
+    x = np.zeros(n)
+    for chord, start, length in progression:
+        a = max(0.0, (start - anticipation) * beat)
+        b = (start + length - anticipation) * beat
+        i, j = int(a * sr), int(b * sr)
+        tt = t[i:j]
+        voice = sum(np.sin(2 * np.pi * f * k * tt) / k for f in TRIADS[chord] for k in range(1, 6))
+        x[i:j] += voice * np.exp(-(tt - a) * 0.8)
+    click = np.hanning(600)
+    for k in range(total_beats):
+        i = int(k * beat * sr)
+        x[i : i + len(click)] += (6.0 if k % beats_per_bar == 0 else 3.0) * click
+    x = 0.6 * x / np.max(np.abs(x))
+    wavfile.write(path, sr, (x * 32767).astype(np.int16))
+    return path
+
+
+@pytest.fixture(scope="session")
+def early_strum_track(tmp_path_factory):
+    return write_progression(
+        tmp_path_factory.mktemp("prog") / "early_strum.wav", EARLY_STRUM_PROGRESSION
+    )
