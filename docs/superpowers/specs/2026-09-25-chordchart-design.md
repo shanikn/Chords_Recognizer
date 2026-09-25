@@ -360,6 +360,28 @@ beat tracking and DBN decoding in M2, why smoothing is needed in M5.
    Keep (a) unless another rule wins on the eval. "A real chord beats N" is tested
    on its own as well, since a chordless intro with one stray beat would otherwise
    gain a chord.
+   Also in M5: **key reliability, before key-aware spelling depends on it.** The key
+   comes only from madmom's key CNN reading the audio. Nothing derives it from the
+   chords. Finding from M2 (2026-09-25): on the synthesized `| C | G | Am | F C |`
+   track, the CNN said **G major 0.39** with P(C major) = 0.03, below chance (1/24).
+   Krumhansl template matching on the same audio's pitch-class energy says
+   **C major, r = 0.93**. The measured energy has F natural 0.24 against F# 0.05, so
+   overtones don't explain it. Making the F last a whole bar still gives G major.
+   Cause: the CNN is outside its training distribution on synthetic timbres. Its
+   behaviour on real recordings is unmeasured.
+   - **Measure it:** `meta.toml` gets a `key` field. The eval harness reports
+     `mir_eval.key` weighted score (fifths and relative keys get partial credit) per
+     song.
+   - **Second opinion:** a template key (Krumhansl-Kessler profiles correlated with
+     madmom's `DeepChromaProcessor` chroma, averaged over the track). If CNN and
+     template disagree, or the CNN's confidence is below a threshold tuned on the
+     eval set, add a key warning to `Song.warnings`.
+   - **Spelling falls back safely:** when the key is flagged, key-aware spelling uses
+     the no-key default instead of a possibly wrong key.
+   - Which key source the chart shows (CNN, template, or CNN with template fallback)
+     is decided by the eval, not by the synthetic result above.
+   - Never assert key values on synthetic audio in tests. It says nothing about real
+     music.
 6. **Exports:** ChordPro and HTML renderers with golden tests.
 7. **Extended vocabulary (7/sus):** add the `sevenths` metric to the eval, then try in
    order until one improves `sevenths` without hurting `majmin`:
