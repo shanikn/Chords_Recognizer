@@ -340,6 +340,26 @@ beat tracking and DBN decoding in M2, why smoothing is needed in M5.
      The thresholds are tuned on the annotated songs (CMLt vs AMLt from §7 is the
      ground truth). The warning is kept only if it flags the octave-error songs
      without flagging the correct ones.
+   Also in M5: **tie rule in bar quantization.** When a split region's beats are
+   evenly split between two labels, M2 lets the earliest beat win. That fell out of
+   `Counter.most_common` keeping insertion order and wasn't a musical choice. The
+   right rule depends on which way the model's timing errs:
+   - *anticipation* (a chord strummed early, belonging to the next bar): the earliest
+     beat wins correctly, because the old chord stays and the change lands on the
+     next downbeat;
+   - *model lag* (a real change at this split point, detected a beat late): the
+     earliest beat wins wrongly, and the change slips half a bar late;
+   - *edge debris* (`C N` at a fade or a gap): a real chord should beat N.
+   Candidates, each scored on the eval set by the `bar_quantize` stage's majmin
+   change:
+   (a) earliest beat wins (the M2 baseline);
+   (b) a real chord beats N, then the longer total duration of the chord's run wins
+       (helps with lag, hurts with anticipation);
+   (c) a real chord beats N, then vote by **seconds of raw-segment overlap** within
+       the region instead of beat counts, so exact ties become rare.
+   Keep (a) unless another rule wins on the eval. "A real chord beats N" is tested
+   on its own as well, since a chordless intro with one stray beat would otherwise
+   gain a chord.
 6. **Exports:** ChordPro and HTML renderers with golden tests.
 7. **Extended vocabulary (7/sus):** add the `sevenths` metric to the eval, then try in
    order until one improves `sevenths` without hurting `majmin`:
