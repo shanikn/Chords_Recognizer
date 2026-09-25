@@ -13,6 +13,9 @@ dependencies = [
     # depends on a system deno/node. YouTube breaks often; to upgrade:
     #   uv lock --upgrade-package yt-dlp && uv sync
     "yt-dlp[default,deno]>=2026.8.19",
+    # madmom uses OpenCV for its CNN convolutions when installed (cv2.filter2D);
+    # without it, a Python loop over every channel pair. Same maths, much faster.
+    "opencv-python-headless>=4.12",
     # `chordchart serve`: local web UI
     "fastapi>=0.141",
     "uvicorn>=0.54",
