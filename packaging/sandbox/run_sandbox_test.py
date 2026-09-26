@@ -50,10 +50,13 @@ def main(mode: str) -> int:
     if artifact is None:
         raise SystemExit(f"nothing to test: no {pattern} in {OUT}")
     inbox = HERE.parent / "build" / "sandbox-in"
-    shutil.rmtree(inbox, ignore_errors=True)
-    shutil.rmtree(RESULTS, ignore_errors=True)
-    inbox.mkdir(parents=True)
-    RESULTS.mkdir(parents=True)
+    _close_sandbox()  # a Sandbox left over from an earlier run keeps these folders busy
+    time.sleep(3)
+    for folder in (inbox, RESULTS):
+        shutil.rmtree(folder, ignore_errors=True)
+        folder.mkdir(parents=True, exist_ok=True)
+        for leftover in folder.iterdir():  # whatever rmtree couldn't remove
+            leftover.unlink(missing_ok=True) if leftover.is_file() else None
     shutil.copy2(artifact, inbox / artifact.name)
     shutil.copy2(HERE / "sandbox_test.ps1", RESULTS / "sandbox_test.ps1")
     (RESULTS / "mode.txt").write_text(mode)
