@@ -10,7 +10,6 @@ Milestone 3 adds URL download (yt-dlp) and a cache in front of this.
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 import wave
 from dataclasses import dataclass
@@ -18,6 +17,7 @@ from pathlib import Path
 
 import numpy as np
 
+from chordchart import bundled
 from chordchart.errors import AudioDecodeError, AudioRejectedError, FfmpegNotFoundError
 from chordchart.timecode import format_time
 
@@ -28,7 +28,7 @@ SILENCE_RMS = 1e-4  # relative to full scale (1.0)
 
 
 def find_ffmpeg() -> str:
-    path = shutil.which("ffmpeg")
+    path = bundled.ffmpeg_path()  # the app's own copy when packaged, else PATH
     if path is None:
         raise FfmpegNotFoundError()
     return path

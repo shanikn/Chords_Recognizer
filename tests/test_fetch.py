@@ -58,7 +58,7 @@ def test_not_audio(tmp_path):
 def test_ffmpeg_missing(monkeypatch, tmp_path):
     src = tmp_path / "a.mp3"
     src.write_bytes(b"x")
-    monkeypatch.setattr("chordchart.fetch.shutil.which", lambda name: None)
+    monkeypatch.setattr("chordchart.bundled.ffmpeg_path", lambda: None)
     with pytest.raises(FfmpegNotFoundError, match="winget install Gyan.FFmpeg"):
         decode_to_wav(src, tmp_path / "out.wav")
 
@@ -156,3 +156,15 @@ def test_padding_does_not_hide_a_start_past_the_end(tone_20s, tmp_path):
 def test_padding_does_not_rescue_a_short_section(tone_20s, tmp_path):
     with pytest.raises(AudioRejectedError, match="selected section is only 3.0 s long"):
         decode_section(tone_20s, tmp_path / "o.wav", start=8, end=11, pad=5)
+
+
+def test_packaged_app_uses_its_own_ffmpeg(monkeypatch, tmp_path):
+    from chordchart import bundled
+
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "ffmpeg.exe").write_bytes(b"")
+    monkeypatch.setattr(bundled, "FROZEN", True)
+    monkeypatch.setattr(bundled.sys, "_MEIPASS", str(tmp_path), raising=False)
+    monkeypatch.setattr(bundled.shutil, "which", lambda name: pytest.fail("PATH must not be used"))
+    assert bundled.ffmpeg_path() == str(tmp_path / "bin" / "ffmpeg.exe")
+    assert bundled.deno_path() is None  # not bundled here, and never taken from the PC

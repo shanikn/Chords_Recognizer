@@ -32,6 +32,7 @@ import yt_dlp
 from yt_dlp.networking.exceptions import TransportError
 from yt_dlp.utils import DownloadError, ExtractorError, UnsupportedError
 
+from chordchart import bundled
 from chordchart.errors import (
     AudioRejectedError,
     CacheError,
@@ -104,6 +105,8 @@ def download(
         "logger": _Logger(),
         "socket_timeout": 20,
     }
+    if deno := bundled.deno_path():  # YouTube needs a JavaScript runtime
+        opts["js_runtimes"] = {"deno": {"path": deno}}
     try:
         with ydl_class(opts) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -144,8 +147,7 @@ def classify(err: DownloadError, url: str) -> ChordChartError:
     if isinstance(cause, ExtractorError) and cause.expected:
         return VideoUnavailableError(f"video unavailable: {_reason(err)}")
     return DownloadFailedError(
-        f"download failed: {_reason(err)}. YouTube changes often; "
-        "try: uv lock --upgrade-package yt-dlp && uv sync"
+        f"download failed: {_reason(err)}. YouTube changes often; {bundled.UPDATE_HINT}"
     )
 
 
