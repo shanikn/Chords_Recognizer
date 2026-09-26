@@ -141,8 +141,10 @@ def _weights_file(filename: str, status: Status | None) -> str:
         pass
     if status and filename.endswith(".safetensors"):
         status(f"downloading the instrument separation model ({MODEL_MB} MB, first time only)")
-    # It warns that the request is unauthenticated: fine for a public model.
+    # It warns that the request is unauthenticated (fine for a public model), and the
+    # HTTP client logs every request, signed CDN links included: keep the log quiet.
     logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+    logging.getLogger("httpx2").setLevel(logging.WARNING)
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")

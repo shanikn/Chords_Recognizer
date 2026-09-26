@@ -24,7 +24,7 @@ TARGET = HERE / "build" / "licenses"
 VENDOR = HERE / "vendor"
 
 ROOTS = ["chordchart"]
-EXCLUDED = {"mutagen", "pytest", "pyinstaller", "pywebview", "deno"}  # see chordchart.spec
+EXCLUDED = {"mutagen", "pytest", "pyinstaller", "pywebview", "deno", "lameenc", "sphn"}  # spec
 # (the deno *package* only locates the binary; the deno binary gets its own entry below)
 
 
@@ -83,6 +83,18 @@ def main() -> int:
         "CC BY-NC-SA 4.0 (non-commercial use only)",
         "https://github.com/CPJKU/madmom_models",
         models_license,
+    )
+    from chordchart.notes import stems
+
+    _add_text(
+        rows,
+        "Demucs htdemucs_6s model weights (downloaded on first use, not bundled)",
+        stems.MODEL_REVISION[:12],
+        "MIT",
+        f"https://huggingface.co/{stems.MODEL_REPO}",
+        "The Demucs weights are MIT-licensed, like Demucs itself "
+        "(https://github.com/adefossez/demucs). ChordChart downloads them from the "
+        f"Hugging Face hub ({stems.MODEL_REPO}) the first time notes are transcribed.\n",
     )
     _add_file(
         rows,
