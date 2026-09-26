@@ -1,0 +1,60 @@
+[project]
+name = "chordchart"
+version = "0.1.0"
+description = "Detect the chords of a song and print a bar-aligned chord chart."
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    # Pinned: main has not moved since this commit (spec §2.1). PyPI 0.16.1 does not build.
+    "madmom @ git+https://github.com/CPJKU/madmom@27f032e8947204902c675e5e341a3faf5dc86dae",
+    # Capped: madmom calls np.maximum(x, 0, out) positionally, deprecated in NumPy 2.5
+    # and due to become an error. See spec §2.1 for the two ways to lift the cap.
+    "numpy>=2.0,<2.6",
+    # `deno` ships a JavaScript runtime, which YouTube extraction needs, so nothing
+    # depends on a system deno/node. YouTube breaks often; to upgrade:
+    #   uv lock --upgrade-package yt-dlp && uv sync
+    "yt-dlp[default,deno]>=2026.8.19",
+    # madmom uses OpenCV for its CNN convolutions when installed (cv2.filter2D);
+    # without it, a Python loop over every channel pair. Same maths, much faster.
+    "opencv-python-headless>=4.12",
+    # `chordchart serve`: local web UI
+    "fastapi>=0.141",
+    "uvicorn>=0.54",
+]
+
+[project.scripts]
+chordchart = "chordchart.cli:main"
+
+[dependency-groups]
+dev = ["httpx2>=2.13", "pytest>=8", "ruff>=0.6", "scipy>=1.13"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["chordchart"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: runs madmom models on generated audio (seconds per test)",
+    "accuracy: needs locally stored annotated audio",
+    "network: talks to YouTube; run explicitly with -m network",
+]
+addopts = "-rs -m 'not slow and not accuracy and not network'"
+# Any warning raised from madmom code fails the test run (spec §2.1), except the one
+# known deprecation below. Later entries take precedence over earlier ones.
+filterwarnings = [
+    "error::Warning:madmom",
+    "ignore:Passing more than 2 positional arguments to np.maximum:DeprecationWarning:madmom.ml.nn.activations",
+]
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

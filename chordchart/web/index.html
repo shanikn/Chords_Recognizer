@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChordChart</title>
+<style>
+  :root {
+    --bg: #f7f6f2; --panel: #ffffff; --text: #1d1d1f; --muted: #6b6b70;
+    --line: #dddad2; --accent: #2f6f4f; --accent-text: #ffffff;
+    --error-bg: #fdecea; --error-text: #8a1f11;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151516; --panel: #1f1f21; --text: #ececee; --muted: #9a9aa0;
+      --line: #333336; --accent: #5fb487; --accent-text: #0e1a13;
+      --error-bg: #3a1a16; --error-text: #ffb4a8;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 20px 48px; }
+  h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: -0.01em; }
+  .sub { margin: 0 0 24px; color: var(--muted); }
+  form {
+    display: grid; gap: 12px; padding: 18px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 10px;
+    grid-template-columns: 1fr 110px 110px auto; align-items: end;
+  }
+  label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  input {
+    font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; width: 100%;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button {
+    font: inherit; font-weight: 600; padding: 9px 18px; border: 0; border-radius: 7px;
+    background: var(--accent); color: var(--accent-text); cursor: pointer;
+  }
+  button:disabled { opacity: 0.55; cursor: progress; }
+  @media (max-width: 640px) {
+    form { grid-template-columns: 1fr 1fr; }
+    label.source, button { grid-column: 1 / -1; }
+  }
+  #steps { list-style: none; margin: 20px 0 0; padding: 0; color: var(--muted); }
+  #steps li { padding: 2px 0 2px 24px; position: relative; }
+  #steps li::before { content: "\2713"; position: absolute; left: 4px; color: var(--accent); }
+  #steps li.current { color: var(--text); }
+  #steps li.total { color: var(--text); font-weight: 600; }
+  #steps li.total::before { content: ""; }
+  #steps li.current::before {
+    content: ""; width: 10px; height: 10px; top: 8px; left: 4px;
+    border: 2px solid var(--accent); border-right-color: transparent; border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error {
+    margin-top: 20px; padding: 12px 14px; border-radius: 8px;
+    background: var(--error-bg); color: var(--error-text);
+  }
+  .chart-wrap {
+    margin-top: 20px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; overflow-x: auto;
+  }
+  #chart {
+    margin: 0; padding: 18px 20px;
+    font: 15px/1.7 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  footer { margin-top: 28px; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>ChordChart</h1>
+  <p class="sub">Paste a song link or a file path and get a bar-by-bar chord chart.</p>
+
+  <form id="form" autocomplete="off">
+    <label class="source">Link or file
+      <input id="source" placeholder="https://www.youtube.com/watch?v=..." required>
+    </label>
+    <label>Start <input id="start" placeholder="0:00" inputmode="decimal"></label>
+    <label>End <input id="end" placeholder="end" inputmode="decimal"></label>
+    <button id="go" type="submit">Analyze</button>
+  </form>
+
+  <ol id="steps" hidden></ol>
+  <div id="error" class="error" role="alert" hidden></div>
+  <div id="chart-wrap" class="chart-wrap" hidden><pre id="chart"></pre></div>
+
+  <footer>Runs on this computer only. Chord and beat models: madmom (non-commercial use).</footer>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const form = $("form"), go = $("go"), steps = $("steps"), errorBox = $("error");
+const chartWrap = $("chart-wrap"), chart = $("chart");
+
+function showError(message) {
+  errorBox.textContent = message;
+  errorBox.hidden = false;
+}
+
+// messages: [{text, seconds, running}]. Several stages (beats, chords, key) can be
+// running at once; each shows a spinner until it finishes and gets its time.
+function showSteps(messages, jobRunning, totalSeconds) {
+  const items = messages.map((m) => {
+    const li = document.createElement("li");
+    li.textContent = m.seconds == null ? m.text : `${m.text} — ${m.seconds.toFixed(1)} s`;
+    if (jobRunning && m.running) li.className = "current";
+    return li;
+  });
+  if (totalSeconds != null) {
+    const li = document.createElement("li");
+    li.className = "total";
+    li.textContent = `total — ${totalSeconds.toFixed(1)} s`;
+    items.push(li);
+  }
+  steps.replaceChildren(...items);
+  steps.hidden = items.length === 0;
+}
+
+// Wall-clock total. Not the sum of the steps: some of them overlap.
+function totalOf(song) {
+  return song && song.elapsed ? song.elapsed : null;
+}
+
+async function poll(jobId) {
+  while (true) {
+    const response = await fetch(`/api/jobs/${jobId}`);
+    const job = await response.json();
+    if (!response.ok) throw new Error(job.error || `HTTP ${response.status}`);
+    showSteps(job.messages, job.state === "running", job.state === "done" ? totalOf(job.song) : null);
+    if (job.state === "done") { chart.textContent = job.chart; chartWrap.hidden = false; return; }
+    if (job.state === "error") { showError(job.error); return; }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+}
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  go.disabled = true;
+  go.textContent = "Analyzing…";
+  errorBox.hidden = true;
+  chartWrap.hidden = true;
+  showSteps([], false);
+  try {
+    const response = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: $("source").value, start: $("start").value, end: $("end").value }),
+    });
+    const body = await response.json();
+    if (!response.ok) { showError(body.error || `HTTP ${response.status}`); return; }
+    await poll(body.job_id);
+  } catch (err) {
+    showError(`lost contact with the ChordChart server (${err.message}). Is it still running?`);
+  } finally {
+    go.disabled = false;
+    go.textContent = "Analyze";
+  }
+});
+</script>
+</body>
+</html>
