@@ -32,3 +32,10 @@ web/dist/
 *.mp4
 *.mkv
 *.mov
+
+# Desktop app build (packaging/build.py): downloads, PyInstaller work dirs, outputs
+packaging/vendor/
+packaging/build/
+packaging/dist/
+packaging/out/
+packaging/chordchart-256.png

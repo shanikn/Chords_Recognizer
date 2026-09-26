@@ -34,7 +34,7 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from chordchart.errors import ChordChartError
@@ -199,6 +199,20 @@ def create_app(analyze_fn: Callable | None = None, desktop: Desktop | None = Non
         def ping() -> JSONResponse:
             desktop.last_seen = time.monotonic()
             return JSONResponse({"ok": True})
+
+        @app.get("/licenses", response_class=PlainTextResponse)
+        def licenses() -> str:
+            """The About line's link: every bundled component and its license."""
+            from chordchart import bundled
+
+            folder = bundled.bundle_dir()
+            candidates = [folder / "licenses"] if folder else []
+            candidates.append(Path(__file__).resolve().parents[2] / "packaging/build/licenses")
+            for candidate in candidates:
+                notices = candidate / "THIRD-PARTY-NOTICES.txt"
+                if notices.is_file():
+                    return notices.read_text(encoding="utf-8")
+            return "License notices are included in the installed app (licenses folder)."
 
         @app.post("/api/quit")
         async def quit_app(request: Request) -> JSONResponse:

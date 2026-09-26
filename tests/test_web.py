@@ -292,3 +292,10 @@ def test_desktop_quit_needs_json():
     )
     time.sleep(0.5)
     assert quits == []
+
+
+def test_desktop_licenses_page():
+    client, _ = _desktop_client([])
+    response = client.get("/licenses")
+    assert response.status_code == 200
+    assert "text/plain" in response.headers["content-type"]

@@ -181,7 +181,13 @@ async function poll(jobId) {
   let info;
   try { info = await (await fetch("/api/app")).json(); } catch { return; }
   if (!info.desktop) return;
-  $("version").textContent = ` · ChordChart ${info.version}`;
+  const version = $("version");
+  version.append(` · ChordChart ${info.version} · `);
+  const licenses = document.createElement("a");
+  licenses.href = "/licenses";
+  licenses.target = "_blank";
+  licenses.textContent = "Licenses";
+  version.append(licenses);
   const quit = $("quit");
   quit.hidden = false;
   setInterval(() => fetch("/api/ping").catch(() => {}), 20000);

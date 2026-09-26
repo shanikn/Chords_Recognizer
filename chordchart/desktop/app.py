@@ -26,7 +26,9 @@ import threading
 import time
 import webbrowser
 
-IDLE_EXIT = 5 * 60  # seconds with no open page (the page pings every 20 s)
+# Seconds with no open page before exiting (the page pings every 20 s). The
+# environment variable is for testing only.
+IDLE_EXIT = int(os.environ.get("CHORDCHART_IDLE_EXIT", 5 * 60))
 FRIENDLY_UPDATE_HINT = (
     "close ChordChart, wait a few days, and try again; if it keeps failing, ask for an "
     "updated ChordChart"
