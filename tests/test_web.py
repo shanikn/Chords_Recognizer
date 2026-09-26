@@ -299,3 +299,70 @@ def test_desktop_licenses_page():
     response = client.get("/licenses")
     assert response.status_code == 200
     assert "text/plain" in response.headers["content-type"]
+
+
+# Notes: POST /api/notes, the job's "notes" and "progress", the MIDI download.
+
+
+def _transcription(instrument="piano"):
+    from chordchart.notes.model import Note, Transcription
+
+    return Transcription(
+        title="Café song", source=LINK, instrument=instrument, automatic=True,
+        levels={"bass": -70.0, "guitar": -70.0, "piano": -20.0, "other": -70.0},
+        notes=[Note(0.0, 0.5, 60, 90, step=0, steps=4)], bpm=120.0, meter=4,
+        section_start=0.0, section_end=2.0, bar_steps=[0], chords=[(0, "C")],
+    )  # fmt: skip
+
+
+def _notes_client(notes_fn):
+    app = create_app(lambda *a, **k: None, notes_fn=notes_fn)
+    return TestClient(app, base_url="http://127.0.0.1:8765")
+
+
+def test_notes_job_returns_the_transcription_and_progress():
+    calls = []
+
+    def notes_fn(source, **kwargs):
+        calls.append((source, kwargs["instrument"], kwargs["start"], kwargs["end"]))
+        kwargs["progress"](0.5)
+        kwargs["status"]("separating instruments", started=True)
+        return _transcription()
+
+    client = _notes_client(notes_fn)
+    body = {"source": LINK, "start": "1:05", "end": "", "instrument": "auto"}
+    job_id = client.post("/api/notes", json=body, headers=JSON).json()["job_id"]
+    job = _wait(client, job_id)
+    assert job["state"] == "done", job
+    assert calls == [(LINK, None, 65.0, None)]
+    assert job["progress"] == 0.5
+    assert job["notes"]["instrument"] == "piano"
+    assert job["notes"]["notes"][0]["pitch"] == 60
+
+
+def test_notes_instrument_is_passed_and_checked():
+    seen = []
+    client = _notes_client(lambda s, **k: seen.append(k["instrument"]) or _transcription("bass"))
+    body = {"source": LINK, "instrument": "bass"}
+    _wait(client, client.post("/api/notes", json=body, headers=JSON).json()["job_id"])
+    assert seen == ["bass"]
+    bad = client.post("/api/notes", json={"source": LINK, "instrument": "vocals"}, headers=JSON)
+    assert bad.status_code == 400 and "instrument" in bad.json()["error"]
+
+
+def test_notes_midi_download():
+    client = _notes_client(lambda s, **k: _transcription())
+    job_id = client.post("/api/notes", json={"source": LINK}, headers=JSON).json()["job_id"]
+    _wait(client, job_id)
+    response = client.get(f"/api/notes/{job_id}.mid")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "audio/midi"
+    assert response.content[:4] == b"MThd"
+    disposition = response.headers["content-disposition"]
+    assert "attachment" in disposition and "Caf%C3%A9%20song%20%28piano%29.mid" in disposition
+    assert client.get("/api/notes/nope.mid").status_code == 404
+
+
+def test_notes_needs_json_like_analyze():
+    client = _notes_client(lambda s, **k: _transcription())
+    assert client.post("/api/notes", content="source=x").status_code == 415

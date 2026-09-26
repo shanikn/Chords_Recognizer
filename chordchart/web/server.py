@@ -3,6 +3,9 @@
     GET  /                 the page (index.html next to this file)
     POST /api/analyze      {"source", "start", "end"} -> {"job_id"}
     GET  /api/jobs/{id}    {"state": running|done|error, "messages", "chart", "song", "error"}
+    POST /api/notes        {"source", "start", "end", "instrument"} -> {"job_id"}; the job's
+                           "notes" is the Transcription, "progress" the stem separation's
+    GET  /api/notes/{id}.mid   that job's notes as a MIDI file
 
 The page polls the job while it runs. Analyses run one at a time on a worker thread:
 the models already use the whole CPU, so running two at once would only slow both.
@@ -30,15 +33,18 @@ from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass, field
+from functools import partial
 from pathlib import Path
+from urllib.parse import quote
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from chordchart.errors import ChordChartError
 from chordchart.interactive import unquote
+from chordchart.notes.model import INSTRUMENTS
 from chordchart.render.text import render_text
 from chordchart.timecode import parse_time
 
@@ -58,6 +64,8 @@ class Job:
     messages: list[dict] = field(default_factory=list)
     chart: str | None = None  # render_text(song)
     song: dict | None = None  # Song JSON
+    notes: dict | None = None  # Transcription JSON (notes jobs)
+    progress: float | None = None  # notes jobs: stem separation, 0..1
     error: str | None = None
 
 
@@ -75,10 +83,15 @@ class Desktop:
     last_seen: float = field(default_factory=time.monotonic)
 
 
-def create_app(analyze_fn: Callable | None = None, desktop: Desktop | None = None) -> FastAPI:
+def create_app(
+    analyze_fn: Callable | None = None,
+    desktop: Desktop | None = None,
+    notes_fn: Callable | None = None,
+) -> FastAPI:
     """The app. `analyze_fn` defaults to pipeline.analyze with one set of processors
-    kept loaded for the server's lifetime; tests pass a fake instead. `desktop` adds
-    the desktop app's quit button and heartbeat."""
+    kept loaded for the server's lifetime; tests pass a fake instead. `notes_fn`
+    defaults to notes.pipeline.transcribe_notes using that same `analyze_fn`. `desktop`
+    adds the desktop app's quit button and heartbeat."""
     worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="chordchart-job")
     loaded: Future | None = None
     if analyze_fn is None:
@@ -91,6 +104,13 @@ def create_app(analyze_fn: Callable | None = None, desktop: Desktop | None = Non
 
         def analyze_fn(source: str, **kwargs):
             return analyze(source, processors=loaded.result(), **kwargs)
+
+    if notes_fn is None:
+
+        def notes_fn(source: str, **kwargs):
+            from chordchart.notes.pipeline import transcribe_notes  # torch: only when used
+
+            return transcribe_notes(source, analyze_fn=analyze_fn, **kwargs)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -106,12 +126,14 @@ def create_app(analyze_fn: Callable | None = None, desktop: Desktop | None = Non
     )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=[HOST, "localhost"])
     jobs: dict[str, Job] = {}
+    transcriptions: dict = {}  # job id -> Transcription, for the MIDI download
     lock = threading.Lock()
     pending = [0]  # jobs submitted but not finished; a list so run() can update it
     app.state.is_busy = lambda: pending[0] > 0
     app.state.desktop = desktop
 
-    def run(job: Job, source: str, start: float, end: float | None) -> None:
+    def run(job: Job, work: Callable) -> None:
+        """Run `work(status)`, which stores its result in `job`; then mark it done."""
         with lock:  # our turn: stop the "waiting for the previous analysis" spinner
             for entry in job.messages:
                 entry["running"] = False
@@ -133,15 +155,14 @@ def create_app(analyze_fn: Callable | None = None, desktop: Desktop | None = Non
                 )
 
         try:
-            song = analyze_fn(source, start=start, end=end, status=status)
-            chart, data = render_text(song), json.loads(song.to_json())
+            work(status)
             with lock:
-                job.chart, job.song, job.state = chart, data, "done"
+                job.state = "done"
         except ChordChartError as exc:
             with lock:
                 job.error, job.state = str(exc), "error"
         except Exception as exc:  # show it on the page, and keep the server alive
-            log.exception("analysis of %s failed", source)
+            log.exception("job failed")
             with lock:
                 job.error = f"internal error: {type(exc).__name__}: {exc} (details in the terminal)"
                 job.state = "error"
@@ -153,29 +174,7 @@ def create_app(analyze_fn: Callable | None = None, desktop: Desktop | None = Non
     def page() -> str:
         return PAGE.read_text(encoding="utf-8")
 
-    @app.post("/api/analyze")
-    async def start_analysis(request: Request) -> JSONResponse:
-        content_type = request.headers.get("content-type", "").split(";")[0].strip()
-        if content_type != "application/json":
-            return _error("send JSON (Content-Type: application/json)", 415)
-        try:
-            body = await request.json()
-        except ValueError:
-            return _error("the request body is not valid JSON", 400)
-        if not isinstance(body, dict):
-            return _error("the request body must be a JSON object", 400)
-
-        source = unquote(str(body.get("source") or ""))
-        if not source:
-            return _error("enter a link or a file path", 400)
-        try:
-            start = _time(body.get("start"), default=0.0)
-            end = _time(body.get("end"), default=None)
-        except ValueError as exc:
-            return _error(str(exc), 400)
-        if end is not None and end <= start:
-            return _error("the end must be after the start", 400)
-
+    def submit(work: Callable) -> JSONResponse:
         job_id = uuid.uuid4().hex
         job = Job()
         with lock:
@@ -183,8 +182,68 @@ def create_app(analyze_fn: Callable | None = None, desktop: Desktop | None = Non
                 job.messages.append({"text": QUEUED, "seconds": None, "running": True})
             pending[0] += 1
             jobs[job_id] = job
-        worker.submit(run, job, source, start, end)
+        worker.submit(run, job, partial(work, job_id, job))
         return JSONResponse({"job_id": job_id})
+
+    @app.post("/api/analyze")
+    async def start_analysis(request: Request) -> JSONResponse:
+        parsed = await _read_request(request)
+        if isinstance(parsed, JSONResponse):
+            return parsed
+        source, start, end, _ = parsed
+
+        def work(job_id: str, job: Job, status: Callable) -> None:
+            song = analyze_fn(source, start=start, end=end, status=status)
+            chart, data = render_text(song), json.loads(song.to_json())
+            with lock:
+                job.chart, job.song = chart, data
+
+        return submit(work)
+
+    @app.post("/api/notes")
+    async def start_notes(request: Request) -> JSONResponse:
+        parsed = await _read_request(request)
+        if isinstance(parsed, JSONResponse):
+            return parsed
+        source, start, end, body = parsed
+        instrument = str(body.get("instrument") or "auto")
+        if instrument != "auto" and instrument not in INSTRUMENTS:
+            return _error(f"instrument must be auto or one of {', '.join(INSTRUMENTS)}", 400)
+
+        def work(job_id: str, job: Job, status: Callable) -> None:
+            def progress(fraction: float) -> None:
+                with lock:
+                    job.progress = round(fraction, 3)
+
+            result = notes_fn(
+                source,
+                start=start,
+                end=end,
+                instrument=None if instrument == "auto" else instrument,
+                status=status,
+                progress=progress,
+            )
+            data = json.loads(result.to_json())
+            with lock:
+                transcriptions[job_id] = result
+                job.notes = data
+
+        return submit(work)
+
+    @app.get("/api/notes/{job_id}.mid")
+    def notes_midi(job_id: str) -> Response:
+        from chordchart.notes.midi import to_midi
+
+        with lock:
+            result = transcriptions.get(job_id)
+        if result is None:
+            return _error("no notes for this job", 404)
+        name = f"{result.title} ({result.instrument}).mid"
+        return Response(
+            to_midi(result),
+            media_type="audio/midi",
+            headers={"Content-Disposition": _attachment(name)},
+        )
 
     @app.get("/api/app")
     def app_info() -> JSONResponse:
@@ -248,6 +307,37 @@ def serve(port: int = DEFAULT_PORT, open_browser: bool = True) -> int:
         _open_browser_soon(url)
     uvicorn.run(create_app(), host=HOST, port=port, log_level="warning")
     return 0
+
+
+async def _read_request(request: Request):
+    """(source, start, end, body) of a JSON analysis request, or an error response."""
+    content_type = request.headers.get("content-type", "").split(";")[0].strip()
+    if content_type != "application/json":
+        return _error("send JSON (Content-Type: application/json)", 415)
+    try:
+        body = await request.json()
+    except ValueError:
+        return _error("the request body is not valid JSON", 400)
+    if not isinstance(body, dict):
+        return _error("the request body must be a JSON object", 400)
+
+    source = unquote(str(body.get("source") or ""))
+    if not source:
+        return _error("enter a link or a file path", 400)
+    try:
+        start = _time(body.get("start"), default=0.0)
+        end = _time(body.get("end"), default=None)
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    if end is not None and end <= start:
+        return _error("the end must be after the start", 400)
+    return source, start, end, body
+
+
+def _attachment(name: str) -> str:
+    """Content-Disposition for a download, keeping a non-ASCII title (RFC 6266)."""
+    plain = name.encode("ascii", "replace").decode().replace('"', "'")
+    return f"attachment; filename=\"{plain}\"; filename*=UTF-8''{quote(name)}"
 
 
 def _time(value: object, default: float | None) -> float | None:
