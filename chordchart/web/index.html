@@ -6,14 +6,14 @@
 <title>ChordChart</title>
 <style>
   :root {
-    --bg: #f7f6f2; --panel: #ffffff; --text: #1d1d1f; --muted: #6b6b70;
+    --bg: #f7f6f2; --panel: #ffffff; --text: #1d1d1f; --muted: #5f5f64;
     --line: #dddad2; --accent: #2f6f4f; --accent-text: #ffffff;
     --error-bg: #fdecea; --error-text: #8a1f11;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #151516; --panel: #1f1f21; --text: #ececee; --muted: #9a9aa0;
+      --bg: #151516; --panel: #1f1f21; --text: #ececee; --muted: #a8a8ae;
       --line: #333336; --accent: #5fb487; --accent-text: #0e1a13;
       --error-bg: #3a1a16; --error-text: #ffb4a8;
       color-scheme: dark;
@@ -22,56 +22,59 @@
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    font: 18px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
-  main { max-width: 860px; margin: 0 auto; padding: 32px 20px 48px; }
-  h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: -0.01em; }
-  .sub { margin: 0 0 24px; color: var(--muted); }
+  main { max-width: 960px; margin: 0 auto; padding: 36px 20px 56px; }
+  h1 { margin: 0 0 6px; font-size: 34px; letter-spacing: -0.01em; }
+  .sub { margin: 0 0 26px; color: var(--muted); }
   form {
-    display: grid; gap: 12px; padding: 18px; background: var(--panel);
-    border: 1px solid var(--line); border-radius: 10px;
-    grid-template-columns: 1fr 110px 110px auto; align-items: end;
+    display: grid; gap: 14px; padding: 20px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px;
+    grid-template-columns: 1fr 130px 130px auto; align-items: end;
   }
-  label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  label { display: grid; gap: 6px; font-size: 16px; color: var(--muted); }
   input {
     font: inherit; color: var(--text); background: var(--bg);
-    border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; width: 100%;
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; width: 100%;
   }
   input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   button {
-    font: inherit; font-weight: 600; padding: 9px 18px; border: 0; border-radius: 7px;
+    font: inherit; font-weight: 600; padding: 11px 22px; border: 0; border-radius: 8px;
     background: var(--accent); color: var(--accent-text); cursor: pointer;
   }
   button:disabled { opacity: 0.55; cursor: progress; }
-  @media (max-width: 640px) {
+  @media (max-width: 680px) {
     form { grid-template-columns: 1fr 1fr; }
     label.source, button { grid-column: 1 / -1; }
   }
-  #steps { list-style: none; margin: 20px 0 0; padding: 0; color: var(--muted); }
-  #steps li { padding: 2px 0 2px 24px; position: relative; }
-  #steps li::before { content: "\2713"; position: absolute; left: 4px; color: var(--accent); }
+  #steps { list-style: none; margin: 22px 0 0; padding: 0; color: var(--muted); }
+  #steps li { padding: 3px 0 3px 30px; position: relative; }
+  #steps li::before { content: "\2713"; position: absolute; left: 6px; color: var(--accent); }
   #steps li.current { color: var(--text); }
-  #steps li.total { color: var(--text); font-weight: 600; }
-  #steps li.total::before { content: ""; }
   #steps li.current::before {
-    content: ""; width: 10px; height: 10px; top: 8px; left: 4px;
+    content: ""; width: 12px; height: 12px; top: 11px; left: 6px;
     border: 2px solid var(--accent); border-right-color: transparent; border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   .error {
-    margin-top: 20px; padding: 12px 14px; border-radius: 8px;
+    margin-top: 22px; padding: 14px 16px; border-radius: 10px;
     background: var(--error-bg); color: var(--error-text);
   }
   .chart-wrap {
-    margin-top: 20px; background: var(--panel); border: 1px solid var(--line);
-    border-radius: 10px; overflow-x: auto;
+    margin-top: 22px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; overflow-x: auto;
   }
   #chart {
-    margin: 0; padding: 18px 20px;
-    font: 15px/1.7 ui-monospace, "Cascadia Mono", Consolas, monospace;
+    margin: 0; padding: 20px 24px;
+    font: 19px/1.75 ui-monospace, "Cascadia Mono", Consolas, monospace;
   }
-  footer { margin-top: 28px; font-size: 12px; color: var(--muted); }
+  .timer {
+    margin-top: 22px; font-size: 20px; font-variant-numeric: tabular-nums;
+    color: var(--muted);
+  }
+  .timer.done { color: var(--text); font-weight: 600; }
+  footer { margin-top: 30px; font-size: 14px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -91,6 +94,7 @@
   <ol id="steps" hidden></ol>
   <div id="error" class="error" role="alert" hidden></div>
   <div id="chart-wrap" class="chart-wrap" hidden><pre id="chart"></pre></div>
+  <div id="timer" class="timer" aria-live="off" hidden></div>
 
   <footer>Runs on this computer only. Chord and beat models: madmom (non-commercial use).</footer>
 </main>
@@ -98,7 +102,7 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const form = $("form"), go = $("go"), steps = $("steps"), errorBox = $("error");
-const chartWrap = $("chart-wrap"), chart = $("chart");
+const chartWrap = $("chart-wrap"), chart = $("chart"), timer = $("timer");
 
 function showError(message) {
   errorBox.textContent = message;
@@ -107,36 +111,54 @@ function showError(message) {
 
 // messages: [{text, seconds, running}]. Several stages (beats, chords, key) can be
 // running at once; each shows a spinner until it finishes and gets its time.
-function showSteps(messages, jobRunning, totalSeconds) {
+function showSteps(messages, jobRunning) {
   const items = messages.map((m) => {
     const li = document.createElement("li");
     li.textContent = m.seconds == null ? m.text : `${m.text} — ${m.seconds.toFixed(1)} s`;
     if (jobRunning && m.running) li.className = "current";
     return li;
   });
-  if (totalSeconds != null) {
-    const li = document.createElement("li");
-    li.className = "total";
-    li.textContent = `total — ${totalSeconds.toFixed(1)} s`;
-    items.push(li);
-  }
   steps.replaceChildren(...items);
   steps.hidden = items.length === 0;
 }
 
-// Wall-clock total. Not the sum of the steps: some of them overlap.
-function totalOf(song) {
-  return song && song.elapsed ? song.elapsed : null;
+// Timer: from pressing Analyze until the chart (or an error) appears, so it's the
+// time you actually waited, download included.
+let timerStart = 0, timerTick = null;
+
+function formatDuration(ms) {
+  // Round to tenths first, so 59.96 s carries over to "1:00.0" instead of "60.0 s".
+  const tenths = Math.round(ms / 100);
+  const minutes = Math.floor(tenths / 600);
+  const rest = ((tenths - minutes * 600) / 10).toFixed(1);
+  return minutes ? `${minutes}:${rest.padStart(4, "0")}` : `${rest} s`;
 }
 
+function startTimer() {
+  timerStart = performance.now();
+  timer.classList.remove("done");
+  timer.hidden = false;
+  const show = () => { timer.textContent = `Analyzing… ${formatDuration(performance.now() - timerStart)}`; };
+  show();
+  timerTick = setInterval(show, 100);
+}
+
+function stopTimer(finished) {
+  clearInterval(timerTick);
+  const took = formatDuration(performance.now() - timerStart);
+  timer.textContent = finished ? `Total time: ${took}` : `Stopped after ${took}`;
+  timer.classList.toggle("done", finished);
+}
+
+// Returns true when the chart arrived, false on an error.
 async function poll(jobId) {
   while (true) {
     const response = await fetch(`/api/jobs/${jobId}`);
     const job = await response.json();
     if (!response.ok) throw new Error(job.error || `HTTP ${response.status}`);
-    showSteps(job.messages, job.state === "running", job.state === "done" ? totalOf(job.song) : null);
-    if (job.state === "done") { chart.textContent = job.chart; chartWrap.hidden = false; return; }
-    if (job.state === "error") { showError(job.error); return; }
+    showSteps(job.messages, job.state === "running");
+    if (job.state === "done") { chart.textContent = job.chart; chartWrap.hidden = false; return true; }
+    if (job.state === "error") { showError(job.error); return false; }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 }
@@ -148,6 +170,8 @@ form.addEventListener("submit", async (event) => {
   errorBox.hidden = true;
   chartWrap.hidden = true;
   showSteps([], false);
+  startTimer();
+  let finished = false;
   try {
     const response = await fetch("/api/analyze", {
       method: "POST",
@@ -156,10 +180,11 @@ form.addEventListener("submit", async (event) => {
     });
     const body = await response.json();
     if (!response.ok) { showError(body.error || `HTTP ${response.status}`); return; }
-    await poll(body.job_id);
+    finished = await poll(body.job_id);
   } catch (err) {
     showError(`lost contact with the ChordChart server (${err.message}). Is it still running?`);
   } finally {
+    stopTimer(finished);
     go.disabled = false;
     go.textContent = "Analyze";
   }

@@ -36,6 +36,7 @@ def test_page_is_served():
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
     assert "Analyze" in response.text
+    assert 'id="timer"' in response.text  # total-time display under the chart
 
 
 def test_analysis_reports_progress_then_the_chart(sample_song):
