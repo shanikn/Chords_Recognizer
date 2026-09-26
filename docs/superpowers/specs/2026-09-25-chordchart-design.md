@@ -444,3 +444,34 @@ beat tracking and DBN decoding in M2, why smoothing is needed in M5.
    bar-grid chart view.
 9. **Stretch:** transpose button, and capo suggestion (the capo position that
    minimises barre chords in the transposed chart).
+
+## 10. Windows desktop app (added 2026-09-26)
+
+For people without Python. Round 1 is built (branch `feat/desktop-app`); round 2 follows.
+
+**Round 1 (done):**
+- PyInstaller one-folder app (`packaging/chordchart.spec`, `packaging/build.py`). It
+  bundles Python, madmom and its models, OpenCV, an LGPL ffmpeg 9.0.2 (pinned, SHA-256
+  checked), yt-dlp with its ejs solver, and deno.
+- `ChordChart.exe` (`chordchart/desktop/app.py`):
+  - `multiprocessing.freeze_support()`, and logging to
+    `%LOCALAPPDATA%\ChordChart\logs`;
+  - the server on a free 127.0.0.1 port, opened in the default browser;
+  - exits on the page's "Quit ChordChart" button, or after 5 minutes with no page
+    open; the beat workers are terminated on exit.
+- The chord and key CNNs run one after the other (see §4 and `pipeline._run_models`).
+  Concurrent OpenCV use failed once in Sandbox.
+- Inno Setup installer: per user, no admin; desktop and Start Menu shortcuts; an
+  uninstaller that offers to delete downloaded songs.
+- Licenses for all 33 bundled components (`collect_licenses.py`), shown via the
+  page's "Licenses" link.
+- Verified in Windows Sandbox (`packaging/sandbox/`): self-test, a real YouTube
+  analysis, Quit, idle exit, install and uninstall.
+
+**Round 2 (planned):**
+- the app's own window (pywebview);
+- a single instance;
+- a Windows Job Object, so workers die even if the app crashes;
+- the "Update YouTube support" button (the updater, `desktop/ytdlp_update.py`, is
+  built and tested but has no button yet);
+- a one-page PDF how-to (install, SmartScreen, antivirus, updating, uninstalling).

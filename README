@@ -87,6 +87,21 @@ A 3.5-minute song takes about 35-45 s the first time on an 8-core machine.
 If YouTube downloads start failing, upgrade yt-dlp:
     uv lock --upgrade-package yt-dlp && uv sync
 
+Windows desktop app
+-------------------
+A self-contained app for people without Python: double-click the icon, the page opens
+in the default browser; "Quit ChordChart" (or ~5 minutes with no page open) exits.
+Everything is bundled: Python, madmom and its models, OpenCV, an LGPL ffmpeg, yt-dlp
+and its JavaScript runtime (deno). Licenses: packaging/build/licenses after a build,
+and the "Licenses" link in the app's footer.
+    uv sync --group desktop                             # PyInstaller (+ pywebview, later)
+    winget install JRSoftware.InnoSetup                 # for the installer
+    uv run python packaging/build.py                    # -> packaging/out/*.zip
+    uv run python packaging/build.py --installer        # -> also ChordChart-Setup-*.exe
+    uv run python packaging/sandbox/run_sandbox_test.py zip        # test on a clean
+    uv run python packaging/sandbox/run_sandbox_test.py installer  # Windows (Sandbox)
+The packaged app has a headless check: ChordChart.exe --self-test report.json
+
 Tests
 -----
     uv run pytest                          # fast tests (no models, no network)
