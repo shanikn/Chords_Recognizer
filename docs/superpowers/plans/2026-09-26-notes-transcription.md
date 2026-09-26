@@ -1,6 +1,6 @@
 # ChordChart: Notes Transcription — Implementation Plan
 
-**Status: in progress** (branch feat/notes-recognizer).
+**Status: completed 2026-09-26** (all tasks, on branch feat/notes-recognizer).
 
 **Goal:** Besides the chord chart, show the notes of the song's main instrument: a piano
 roll under the chord sheet, and a MIDI file to download. It runs only when asked for
