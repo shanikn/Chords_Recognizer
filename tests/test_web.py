@@ -205,7 +205,7 @@ def test_server_loads_processors_once_and_closes_them_on_shutdown(monkeypatch, s
         def __init__(self, **kwargs):
             built.append(kwargs)
 
-        def close(self):
+        def close(self, force=False):
             closed.append(True)
 
     def fake_analyze(source, **kw):
@@ -253,3 +253,42 @@ def test_overlapping_stages_each_get_their_own_time(sample_song):
         {"text": "tracking beats", "seconds": 2.5, "running": False},
         {"text": "recognizing chords", "seconds": 1.5, "running": False},
     ]
+
+
+def _desktop_client(quits):
+    from chordchart.web.server import Desktop
+
+    desktop = Desktop(on_quit=lambda: quits.append(True), version="1.0.0")
+    app = create_app(lambda *a, **k: None, desktop=desktop)
+    return TestClient(app, base_url="http://127.0.0.1:8765"), desktop
+
+
+def test_plain_server_is_not_a_desktop_app():
+    assert _client(lambda *a, **k: None).get("/api/app").json() == {"desktop": False}
+    assert _client(lambda *a, **k: None).get("/api/ping").status_code == 404
+
+
+def test_desktop_quit_button_and_heartbeat():
+    quits = []
+    client, desktop = _desktop_client(quits)
+    assert client.get("/api/app").json() == {"desktop": True, "version": "1.0.0"}
+
+    before = desktop.last_seen
+    time.sleep(0.01)
+    assert client.get("/api/ping").status_code == 200
+    assert desktop.last_seen > before
+
+    assert client.post("/api/quit", json={}).status_code == 200
+    time.sleep(0.5)  # quit runs just after the response
+    assert quits == [True]
+
+
+def test_desktop_quit_needs_json():
+    quits = []
+    client, _ = _desktop_client(quits)
+    assert (
+        client.post("/api/quit", content="x", headers={"Content-Type": "text/plain"}).status_code
+        == 415
+    )
+    time.sleep(0.5)
+    assert quits == []

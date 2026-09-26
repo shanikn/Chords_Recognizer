@@ -75,12 +75,24 @@
   }
   .timer.done { color: var(--text); font-weight: 600; }
   footer { margin-top: 30px; font-size: 14px; color: var(--muted); }
+  header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  button.quit {
+    background: transparent; color: var(--muted); border: 1px solid var(--line);
+    font-weight: 500; padding: 8px 14px; font-size: 15px;
+  }
+  button.quit:hover { color: var(--text); border-color: var(--muted); }
+  .closed { margin-top: 40px; font-size: 22px; }
 </style>
 </head>
 <body>
 <main>
-  <h1>ChordChart</h1>
-  <p class="sub">Paste a song link or a file path and get a bar-by-bar chord chart.</p>
+  <header>
+    <div>
+      <h1>ChordChart</h1>
+      <p class="sub">Paste a song link or a file path and get a bar-by-bar chord chart.</p>
+    </div>
+    <button id="quit" class="quit" type="button" hidden>Quit ChordChart</button>
+  </header>
 
   <form id="form" autocomplete="off">
     <label class="source">Link or file
@@ -96,7 +108,7 @@
   <div id="chart-wrap" class="chart-wrap" hidden><pre id="chart"></pre></div>
   <div id="timer" class="timer" aria-live="off" hidden></div>
 
-  <footer>Runs on this computer only. Chord and beat models: madmom (non-commercial use).</footer>
+  <footer>Runs on this computer only. Chord and beat models: madmom (non-commercial use).<span id="version"></span></footer>
 </main>
 
 <script>
@@ -162,6 +174,29 @@ async function poll(jobId) {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 }
+
+// Desktop app: a Quit button, and a heartbeat so the app can close itself a few
+// minutes after the last ChordChart page is closed.
+(async () => {
+  let info;
+  try { info = await (await fetch("/api/app")).json(); } catch { return; }
+  if (!info.desktop) return;
+  $("version").textContent = ` · ChordChart ${info.version}`;
+  const quit = $("quit");
+  quit.hidden = false;
+  setInterval(() => fetch("/api/ping").catch(() => {}), 20000);
+  quit.addEventListener("click", async () => {
+    quit.disabled = true;
+    try {
+      await fetch("/api/quit", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    } catch { /* already closing */ }
+    const main = document.querySelector("main");
+    const note = document.createElement("p");
+    note.className = "closed";
+    note.textContent = "ChordChart has closed. You can close this tab.";
+    main.replaceChildren(note);
+  });
+})();
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();

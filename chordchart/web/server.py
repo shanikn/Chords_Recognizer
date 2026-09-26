@@ -23,6 +23,7 @@ import logging
 import socket
 import sys
 import threading
+import time
 import uuid
 import webbrowser
 from collections.abc import Callable
@@ -60,9 +61,24 @@ class Job:
     error: str | None = None
 
 
-def create_app(analyze_fn: Callable | None = None) -> FastAPI:
+@dataclass
+class Desktop:
+    """Extra behaviour when the server runs inside the Windows desktop app.
+
+    The page shows a "Quit ChordChart" button (POST /api/quit calls `on_quit`) and
+    pings /api/ping while it's open, so the app can exit on its own once no page has
+    been open for a while (see chordchart.desktop.app).
+    """
+
+    on_quit: Callable[[], None]
+    version: str
+    last_seen: float = field(default_factory=time.monotonic)
+
+
+def create_app(analyze_fn: Callable | None = None, desktop: Desktop | None = None) -> FastAPI:
     """The app. `analyze_fn` defaults to pipeline.analyze with one set of processors
-    kept loaded for the server's lifetime; tests pass a fake instead."""
+    kept loaded for the server's lifetime; tests pass a fake instead. `desktop` adds
+    the desktop app's quit button and heartbeat."""
     worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="chordchart-job")
     loaded: Future | None = None
     if analyze_fn is None:
@@ -81,7 +97,9 @@ def create_app(analyze_fn: Callable | None = None) -> FastAPI:
         yield
         worker.shutdown(wait=False, cancel_futures=True)
         if loaded is not None and loaded.done() and loaded.exception() is None:
-            loaded.result().close()  # shuts madmom's worker pools down
+            # Shuts madmom's worker pools down. The desktop app stops them at once,
+            # so quitting never waits for a half-finished analysis.
+            loaded.result().close(force=desktop is not None)
 
     app = FastAPI(
         title="ChordChart", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
@@ -90,6 +108,8 @@ def create_app(analyze_fn: Callable | None = None) -> FastAPI:
     jobs: dict[str, Job] = {}
     lock = threading.Lock()
     pending = [0]  # jobs submitted but not finished; a list so run() can update it
+    app.state.is_busy = lambda: pending[0] > 0
+    app.state.desktop = desktop
 
     def run(job: Job, source: str, start: float, end: float | None) -> None:
         with lock:  # our turn: stop the "waiting for the previous analysis" spinner
@@ -165,6 +185,29 @@ def create_app(analyze_fn: Callable | None = None) -> FastAPI:
             jobs[job_id] = job
         worker.submit(run, job, source, start, end)
         return JSONResponse({"job_id": job_id})
+
+    @app.get("/api/app")
+    def app_info() -> JSONResponse:
+        if desktop is None:
+            return JSONResponse({"desktop": False})
+        desktop.last_seen = time.monotonic()
+        return JSONResponse({"desktop": True, "version": desktop.version})
+
+    if desktop is not None:
+
+        @app.get("/api/ping")
+        def ping() -> JSONResponse:
+            desktop.last_seen = time.monotonic()
+            return JSONResponse({"ok": True})
+
+        @app.post("/api/quit")
+        async def quit_app(request: Request) -> JSONResponse:
+            # JSON-only, like /api/analyze: other websites can't send it cross-origin.
+            content_type = request.headers.get("content-type", "").split(";")[0].strip()
+            if content_type != "application/json":
+                return _error("send JSON (Content-Type: application/json)", 415)
+            threading.Timer(0.3, desktop.on_quit).start()  # let this response go out first
+            return JSONResponse({"ok": True})
 
     @app.get("/api/jobs/{job_id}")
     def job_status(job_id: str) -> JSONResponse:

@@ -42,12 +42,17 @@ class Processors:
         """The worker pools madmom started inside our processors."""
         return list(_find_pools(vars(self).values()))
 
-    def close(self) -> None:
+    def close(self, force: bool = False) -> None:
+        """Shut the worker pools down. `force` stops them at once instead of letting
+        running work finish (used when the desktop app quits mid-analysis)."""
         if self._closed:
             return
         self._closed = True
         for pool in self.pools():
-            pool.close()
+            if force:
+                pool.terminate()
+            else:
+                pool.close()
             pool.join()
 
     def __enter__(self) -> Processors:

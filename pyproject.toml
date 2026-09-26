@@ -1,6 +1,6 @@
 [project]
 name = "chordchart"
-version = "0.1.0"
+version = "1.0.0"
 description = "Detect the chords of a song and print a bar-aligned chord chart."
 requires-python = ">=3.12,<3.14"
 dependencies = [
