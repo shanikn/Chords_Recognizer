@@ -331,16 +331,22 @@ Each milestone ends with a working, tested state. Concepts are explained in code
 comments and in conversation as they come up: chroma and CNN features in M2,
 beat tracking and DBN decoding in M2, why smoothing is needed in M5.
 
-1. **Setup:** uv project, pinned madmom, ruff, pytest, ffmpeg installed. *Done when:*
+1. **[Done 2026-09-26] Setup:** uv project, pinned madmom, ruff, pytest, ffmpeg installed. *Done when:*
    `uv run pytest` passes an import smoke test.
-2. **CLI end-to-end on a local file:** fetch (local), beats, chords, key, minimal
+2. **[Done 2026-09-26] CLI end-to-end on a local file:** fetch (local), beats, chords, key, minimal
    beat-sync + bar grouping, text renderer. *Done when:* a short real clip produces
    a `| C | Am | ...` chart.
-3. **URL input** via yt-dlp, plus the download cache and `--start`/`--end` sections
+3. **[Done 2026-09-26] URL input** via yt-dlp, plus the download cache and `--start`/`--end` sections
    (bar-aligned by whole-bar expansion). *Done when:* a YouTube URL produces the same
    chart as the downloaded file, a second run is served from the cache,
    `chordchart cache info | clear` work, and the network tests pass under
    `-m network` (the default suite never touches YouTube).
+   **Also done early, beyond M1-3:**
+   - the local web page (M8's server part, see M8);
+   - speed-ups: OpenCV convolutions, 4 beat workers, parallel stages, models kept loaded
+     in the server, and the analysis cache (§4 step 1 notes it moved from M5).
+   The M2 done criterion was verified by the user by hand on a song and section
+   they know.
 4. **Annotation helper + eval harness:** you annotate 2–3 songs, and the baseline
    majmin is recorded.
 5. **Accuracy:** the full post-processing chain, option sweeps in the eval harness,

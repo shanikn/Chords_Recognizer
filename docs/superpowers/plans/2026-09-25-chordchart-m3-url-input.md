@@ -1,5 +1,7 @@
 # ChordChart Milestone 3: URL Input — Implementation Plan
 
+**Status: completed 2026-09-26** (all tasks, on branch feat/m1-m2).
+
 > **For agentic workers:** execute inline with superpowers:executing-plans. Stop after each
 > task for review; commit and push after each commit.
 

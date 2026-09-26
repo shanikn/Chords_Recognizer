@@ -1,5 +1,7 @@
 # ChordChart Milestones 1–2 Implementation Plan
 
+**Status: completed 2026-09-26** (all tasks, on branch feat/m1-m2).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A working `chordchart <audio-file>` CLI that prints a bar-aligned chord chart
