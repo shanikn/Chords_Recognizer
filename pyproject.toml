@@ -26,6 +26,8 @@ chordchart = "chordchart.cli:main"
 
 [dependency-groups]
 dev = ["httpx2>=2.13", "pytest>=8", "ruff>=0.6", "scipy>=1.13"]
+# Windows desktop app (packaging/): the window, and the build tool.
+desktop = ["pywebview>=6.2", "pyinstaller>=6.22"]
 
 [build-system]
 requires = ["hatchling"]
