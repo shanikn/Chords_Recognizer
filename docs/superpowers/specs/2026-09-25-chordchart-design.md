@@ -345,8 +345,8 @@ beat tracking and DBN decoding in M2, why smoothing is needed in M5.
    - the local web page (M8's server part, see M8);
    - speed-ups: OpenCV convolutions, 4 beat workers, parallel stages, models kept loaded
      in the server, and the analysis cache (§4 step 1 notes it moved from M5).
-   The M2 done criterion was verified by the user by hand on a song and section
-   they know.
+   The M2 done criterion was verified by the user by hand: a section of Adele,
+   "Someone Like You", matched the chords they know.
 4. **Annotation helper + eval harness:** you annotate 2–3 songs, and the baseline
    majmin is recorded.
 5. **Accuracy:** the full post-processing chain, option sweeps in the eval harness,

@@ -11,8 +11,9 @@ Status
 Milestones 1-3 are done (2026-09-26): command line on files and links, download cache,
 --start/--end sections, plus the local web page (`chordchart serve`) and the speed-ups
 (OpenCV, parallel stages, analysis cache).
-Verified by hand: the chart for a song and section the author knows matched the chords
-they play (M2 done criterion). Accuracy on a scored set of songs starts in milestone 4.
+Verified by hand (M2 done criterion): the chart for a section of Adele, "Someone Like
+You" (YouTube hLQl3WQQoQ0), matched the chords the author knows. Accuracy on a scored
+set of songs starts in milestone 4.
 Next: M4, the annotation helper and the evaluation harness (see the spec).
 
 Setup (Windows)
