@@ -1,10 +1,12 @@
-"""Collect the licenses of everything bundled in the app into packaging/build/licenses/.
+"""Collect the licenses of everything bundled in the app into
+packaging/build/<variant>/licenses/ (the variant comes from CHORDCHART_VARIANT).
 
     THIRD-PARTY-NOTICES.txt   one summary: component, version, license, where from
     <component>/...           the full license texts shipped with each component
 
 Python packages are found by walking ChordChart's runtime dependencies (with the extras
-the app uses), minus what the spec excludes. Components that aren't Python packages
+the app uses), minus what the spec excludes; the lite variant also leaves out every
+package only the notes feature needs (variants.py). Components that aren't Python packages
 (Python itself, ffmpeg, deno, madmom's models, the PyInstaller bootloader) are added
 explicitly. build.py runs this before PyInstaller; the spec bundles the folder.
 """
@@ -17,39 +19,22 @@ import sys
 from importlib import metadata
 from pathlib import Path
 
-from packaging.requirements import Requirement
+import variants
 
 HERE = Path(__file__).resolve().parent
-TARGET = HERE / "build" / "licenses"
+VARIANT = variants.current()
+TARGET = HERE / "build" / VARIANT.key / "licenses"
 VENDOR = HERE / "vendor"
 
-ROOTS = ["chordchart"]
 EXCLUDED = {"mutagen", "pytest", "pyinstaller", "pywebview", "deno", "lameenc", "sphn"}  # spec
 # (the deno *package* only locates the binary; the deno binary gets its own entry below)
 
 
 def runtime_distributions() -> list[metadata.Distribution]:
-    seen: dict[str, metadata.Distribution] = {}
-    todo = [(name, frozenset()) for name in ROOTS]
-    while todo:
-        name, extras = todo.pop()
-        key = _normal(name)
-        if key in EXCLUDED:
-            continue
-        try:
-            dist = metadata.distribution(name)
-        except metadata.PackageNotFoundError:
-            continue
-        first_visit = key not in seen
-        seen[key] = dist
-        for raw in dist.requires or []:
-            req = Requirement(raw)
-            wanted = extras | ({"default", "deno"} if key == "yt-dlp" else frozenset())
-            envs = [{"extra": e} for e in wanted] or [{"extra": ""}]
-            if req.marker and not any(req.marker.evaluate(env) for env in envs):
-                continue
-            if first_visit or req.extras:
-                todo.append((req.name, frozenset(req.extras)))
+    excluded = set(EXCLUDED)
+    if not VARIANT.notes:
+        excluded |= {variants.normal(n) for n in variants.NOTES_ROOTS}
+    seen = variants.reachable(["chordchart"], excluded)
     seen.pop("chordchart", None)
     return sorted(seen.values(), key=lambda d: _normal(d.metadata["Name"]))
 
@@ -84,18 +69,8 @@ def main() -> int:
         "https://github.com/CPJKU/madmom_models",
         models_license,
     )
-    from chordchart.notes import stems
-
-    _add_text(
-        rows,
-        "Demucs htdemucs_6s model weights (downloaded on first use, not bundled)",
-        stems.MODEL_REVISION[:12],
-        "MIT",
-        f"https://huggingface.co/{stems.MODEL_REPO}",
-        "The Demucs weights are MIT-licensed, like Demucs itself "
-        "(https://github.com/adefossez/demucs). ChordChart downloads them from the "
-        f"Hugging Face hub ({stems.MODEL_REPO}) the first time notes are transcribed.\n",
-    )
+    if VARIANT.notes:
+        _add_demucs_weights(rows)
     _add_file(
         rows,
         "Python",
@@ -254,6 +229,23 @@ with a special exception that allows the bootloader to be distributed as part of
 applications built with PyInstaller, under any license:
 https://github.com/pyinstaller/pyinstaller/blob/develop/COPYING.txt
 """
+
+
+def _add_demucs_weights(rows) -> None:
+    """Not bundled, but the full app downloads and runs them, so they get a notice."""
+    from chordchart.notes import stems
+
+    _add_text(
+        rows,
+        "Demucs htdemucs_6s model weights (downloaded on first use, not bundled)",
+        stems.MODEL_REVISION[:12],
+        "MIT",
+        f"https://huggingface.co/{stems.MODEL_REPO}",
+        "The Demucs weights are MIT-licensed, like Demucs itself "
+        "(https://github.com/adefossez/demucs). ChordChart downloads them from the "
+        f"Hugging Face hub ({stems.MODEL_REPO}) the first time notes are transcribed.\n",
+    )
+
 
 if __name__ == "__main__":
     sys.exit(main())

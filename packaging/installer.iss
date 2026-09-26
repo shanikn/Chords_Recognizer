@@ -1,27 +1,43 @@
-; Inno Setup script for ChordChart. Built by: uv run python packaging/build.py --installer
-; Per-user install (no admin prompt): %LOCALAPPDATA%\Programs\ChordChart.
+; Inno Setup script for ChordChart. Built by:
+;     uv run python packaging/build.py --variant lite|full --installer
+; build.py passes the variant's name, AppId and file names (packaging/variants.py); the
+; defaults below are the lite app. Per-user install (no admin prompt):
+; %LOCALAPPDATA%\Programs\<AppName>. The variants have different AppIds, so both can be
+; installed side by side; they share %LOCALAPPDATA%\ChordChart (downloads, caches).
 
 #ifndef AppVersion
   #define AppVersion "1.0.0"
 #endif
+#ifndef AppName
+  #define AppName "ChordChart"
+#endif
+#ifndef AppId
+  #define AppId "{{8E4B6C2A-6F2D-4C1E-9B7A-3C5D2E1F0A9B}"
+#endif
+#ifndef FileStem
+  #define FileStem "ChordChart"
+#endif
+#ifndef Variant
+  #define Variant "lite"
+#endif
 
 [Setup]
-AppId={{8E4B6C2A-6F2D-4C1E-9B7A-3C5D2E1F0A9B}
-AppName=ChordChart
+AppId={#AppId}
+AppName={#AppName}
 AppVersion={#AppVersion}
-AppVerName=ChordChart {#AppVersion}
+AppVerName={#AppName} {#AppVersion}
 AppPublisher=ChordChart
-DefaultDirName={autopf}\ChordChart
-DefaultGroupName=ChordChart
+DefaultDirName={autopf}\{#AppName}
+DefaultGroupName={#AppName}
 PrivilegesRequired=lowest
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 DisableWelcomePage=no
 OutputDir=out
-OutputBaseFilename=ChordChart-Setup-{#AppVersion}
+OutputBaseFilename={#FileStem}-Setup-{#AppVersion}
 SetupIconFile=chordchart.ico
 UninstallDisplayIcon={app}\ChordChart.exe
-UninstallDisplayName=ChordChart
+UninstallDisplayName={#AppName}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 Compression=lzma2/max
@@ -33,25 +49,26 @@ CloseApplications=force
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "Put a ChordChart icon on the desktop"; GroupDescription: "Shortcuts:"
+Name: "desktopicon"; Description: "Put a {#AppName} icon on the desktop"; GroupDescription: "Shortcuts:"
 
 [Files]
-Source: "dist\ChordChart\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\{#AppName}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; The license notices, also at the top level so they're easy to find.
-Source: "build\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "build\{#Variant}\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\ChordChart"; Filename: "{app}\ChordChart.exe"
+Name: "{group}\{#AppName}"; Filename: "{app}\ChordChart.exe"
 Name: "{group}\Third-party licenses"; Filename: "{app}\licenses\THIRD-PARTY-NOTICES.txt"
-Name: "{group}\Uninstall ChordChart"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\ChordChart"; Filename: "{app}\ChordChart.exe"; Tasks: desktopicon
+Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\ChordChart.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\ChordChart.exe"; Description: "Open ChordChart now"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\ChordChart.exe"; Description: "Open {#AppName} now"; Flags: nowait postinstall skipifsilent
 
 [Code]
 // On uninstall, offer to delete downloaded songs, cached analyses, updates and logs
-// (%LOCALAPPDATA%\ChordChart). A silent uninstall keeps them.
+// (%LOCALAPPDATA%\ChordChart). A silent uninstall keeps them. The other variant, if
+// installed, uses the same folder, so it would have to download again.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   DataDir: String;

@@ -1,26 +1,28 @@
-# PyInstaller spec for the ChordChart Windows app. Build with: uv run python packaging/build.py
-# (build.py fetches ffmpeg first). One folder (not onefile): starts faster and trips
-# fewer antivirus heuristics.
+# PyInstaller spec for the ChordChart Windows app. Build with:
+#     uv run python packaging/build.py --variant lite|full
+# (build.py fetches ffmpeg and sets CHORDCHART_VARIANT). One folder (not onefile):
+# starts faster and trips fewer antivirus heuristics. Both variants run ChordChart.exe;
+# only the folder, zip and installer are named after the variant (variants.py).
 
 import os
+import sys
 
-import basic_pitch
 from deno import find_deno_bin
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
-ROOT = os.path.abspath(os.path.join(SPECPATH, ".."))  # noqa: F821 (SPECPATH is set by PyInstaller)
+sys.path.insert(0, SPECPATH)  # noqa: F821 (SPECPATH is set by PyInstaller)
+import variants  # noqa: E402
+
+VARIANT = variants.current()
+ROOT = os.path.abspath(os.path.join(SPECPATH, ".."))  # noqa: F821
 VENDOR = os.path.join(SPECPATH, "vendor")  # noqa: F821
 
 datas = []
 datas += collect_data_files("madmom")  # the pickled models (and their LICENSE)
 datas += collect_data_files("yt_dlp_ejs")  # YouTube's JavaScript challenge solver
 datas += [(os.path.join(ROOT, "chordchart", "web", "index.html"), "chordchart/web")]
-# basic-pitch ships its model in four formats; the app runs only the ONNX one (2 MB).
-# Demucs's weights aren't bundled: they're downloaded on first use (notes/stems.py).
-BP_MODELS = os.path.join(os.path.dirname(basic_pitch.__file__), "saved_models", "icassp_2022")
-datas += [(os.path.join(BP_MODELS, "nmp.onnx"), "basic_pitch/saved_models/icassp_2022")]
-licenses = os.path.join(SPECPATH, "build", "licenses")  # noqa: F821 (collect_licenses.py)
-if os.path.isdir(licenses):
+licenses = os.path.join(SPECPATH, "build", VARIANT.key, "licenses")  # noqa: F821
+if os.path.isdir(licenses):  # from collect_licenses.py
     datas += [(licenses, "licenses")]
 
 binaries = [
@@ -34,11 +36,29 @@ hiddenimports = (
     + collect_submodules("yt_dlp_ejs")
     + collect_submodules("uvicorn")
     + ["chordchart.desktop.selftest", "chordchart.pipeline", "chordchart.processors"]
-    # Notes (imported lazily). Demucs loads its model class by name from the weights'
-    # metadata, so those modules are listed explicitly.
-    + ["chordchart.notes.pipeline", "chordchart.notes.midi", "chordchart.notes.stems"]
-    + ["chordchart.notes.transcribe", "demucs.htdemucs", "demucs.hdemucs", "demucs.demucs"]
 )
+
+# mutagen is GPL and yt-dlp only uses it to tag files; pywebview comes in round 2.
+excludes = ["mutagen", "pytest", "tkinter", "webview", "PyInstaller", "IPython"]
+
+if VARIANT.notes:
+    import basic_pitch
+
+    # basic-pitch ships its model in four formats; the app runs only the ONNX one (2 MB).
+    # Demucs's weights aren't bundled: they're downloaded on first use (notes/stems.py).
+    models = os.path.join(os.path.dirname(basic_pitch.__file__), "saved_models", "icassp_2022")
+    datas += [(os.path.join(models, "nmp.onnx"), "basic_pitch/saved_models/icassp_2022")]
+    # Imported lazily. Demucs loads its model class by name from the weights' metadata.
+    hiddenimports += ["chordchart.notes.pipeline", "chordchart.notes.midi"]
+    hiddenimports += ["chordchart.notes.stems", "chordchart.notes.transcribe"]
+    hiddenimports += ["demucs.htdemucs", "demucs.hdemucs", "demucs.demucs"]
+    # lameenc (LGPL, MP3 encoding) and sphn are only used by Demucs's file writing,
+    # which the app doesn't use; the others are model runtimes basic-pitch can't use here.
+    excludes += ["lameenc", "sphn", "tensorflow", "coremltools", "tflite_runtime", "matplotlib"]
+else:
+    # Chords only: leave out every package only the notes feature pulls in. The app
+    # notices at startup (chordchart.notes.available) and hides the Notes controls.
+    excludes += variants.notes_only_modules() + ["tensorflow", "matplotlib"]
 
 a = Analysis(  # noqa: F821
     [os.path.join(ROOT, "chordchart", "desktop", "app.py")],
@@ -46,13 +66,7 @@ a = Analysis(  # noqa: F821
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
-    # mutagen is GPL and yt-dlp only uses it to tag files; pywebview comes in round 2.
-    # lameenc (LGPL, MP3 encoding) and sphn are only used by Demucs's file writing,
-    # which the app doesn't use; the others are model runtimes basic-pitch can't use here.
-    excludes=[
-        "mutagen", "pytest", "tkinter", "webview", "PyInstaller", "IPython",
-        "lameenc", "sphn", "tensorflow", "coremltools", "tflite_runtime", "matplotlib",
-    ],
+    excludes=excludes,
     noarchive=False,
 )
 pyz = PYZ(a.pure)  # noqa: F821
@@ -66,4 +80,4 @@ exe = EXE(  # noqa: F821
     console=False,  # no terminal window for her
     icon=icon if os.path.exists(icon) else None,
 )
-coll = COLLECT(exe, a.binaries, a.datas, name="ChordChart")  # noqa: F821
+coll = COLLECT(exe, a.binaries, a.datas, name=VARIANT.app_name)  # noqa: F821

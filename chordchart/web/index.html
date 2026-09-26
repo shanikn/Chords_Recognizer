@@ -144,7 +144,7 @@
     <button id="go" type="submit">Analyze</button>
   </form>
 
-  <div class="views" role="group" aria-label="View">
+  <div id="views" class="views" role="group" aria-label="View" hidden>
     <button type="button" id="view-chords" aria-pressed="true">Chords</button>
     <button type="button" id="view-notes" aria-pressed="false">Notes</button>
   </div>
@@ -182,7 +182,7 @@
   <div id="timer" class="timer" aria-live="off" hidden></div>
 
   <footer>Runs on this computer only. Chord and beat models: madmom (non-commercial use).
-    Notes: Demucs and basic-pitch.<span id="version"></span></footer>
+    <span id="notes-credit" hidden>Notes: Demucs and basic-pitch.</span><span id="version"></span></footer>
 </main>
 
 <script>
@@ -395,11 +395,19 @@ function showNotes(t, jobId) {
   if (lastNotes) drawRoll(t); else roll.hidden = true;
 }
 
+// What this server offers. The lite desktop app has no notes: the Chords/Notes toggle
+// (and with it the instrument menu) stays hidden.
+const appInfo = fetch("/api/app").then((response) => response.json());
+appInfo.then((info) => {
+  $("views").hidden = !info.notes;
+  $("notes-credit").hidden = !info.notes;
+}).catch(() => {});
+
 // Desktop app: a Quit button, and a heartbeat so the app can close itself a few
 // minutes after the last ChordChart page is closed.
 (async () => {
   let info;
-  try { info = await (await fetch("/api/app")).json(); } catch { return; }
+  try { info = await appInfo; } catch { return; }
   if (!info.desktop) return;
   const version = $("version");
   version.append(` · ChordChart ${info.version} · `);

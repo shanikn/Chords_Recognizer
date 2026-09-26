@@ -6,6 +6,7 @@
     POST /api/notes        {"source", "start", "end", "instrument"} -> {"job_id"}; the job's
                            "notes" is the Transcription, "progress" the stem separation's
     GET  /api/notes/{id}.mid   that job's notes as a MIDI file
+    GET  /api/app          {"desktop", "version", "notes"}: "notes" false = not installed
 
 The page polls the job while it runs. Analyses run one at a time on a worker thread:
 the models already use the whole CPU, so running two at once would only slow both.
@@ -44,6 +45,8 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from chordchart.errors import ChordChartError
 from chordchart.interactive import unquote
+from chordchart.notes.available import MISSING as NOTES_MISSING
+from chordchart.notes.available import notes_available
 from chordchart.notes.model import INSTRUMENTS
 from chordchart.render.text import render_text
 from chordchart.timecode import parse_time
@@ -87,11 +90,16 @@ def create_app(
     analyze_fn: Callable | None = None,
     desktop: Desktop | None = None,
     notes_fn: Callable | None = None,
+    notes: bool | None = None,
 ) -> FastAPI:
     """The app. `analyze_fn` defaults to pipeline.analyze with one set of processors
     kept loaded for the server's lifetime; tests pass a fake instead. `notes_fn`
-    defaults to notes.pipeline.transcribe_notes using that same `analyze_fn`. `desktop`
-    adds the desktop app's quit button and heartbeat."""
+    defaults to notes.pipeline.transcribe_notes using that same `analyze_fn`. `notes`
+    says whether the notes feature is installed (detected once, here, by default; the
+    lite desktop app leaves it out). `desktop` adds the desktop app's quit button and
+    heartbeat."""
+    if notes is None:
+        notes = notes_available()
     worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="chordchart-job")
     loaded: Future | None = None
     if analyze_fn is None:
@@ -206,6 +214,8 @@ def create_app(
         if isinstance(parsed, JSONResponse):
             return parsed
         source, start, end, body = parsed
+        if not notes:
+            return _error(NOTES_MISSING, 404)
         instrument = str(body.get("instrument") or "auto")
         if instrument != "auto" and instrument not in INSTRUMENTS:
             return _error(f"instrument must be auto or one of {', '.join(INSTRUMENTS)}", 400)
@@ -248,9 +258,9 @@ def create_app(
     @app.get("/api/app")
     def app_info() -> JSONResponse:
         if desktop is None:
-            return JSONResponse({"desktop": False})
+            return JSONResponse({"desktop": False, "notes": notes})
         desktop.last_seen = time.monotonic()
-        return JSONResponse({"desktop": True, "version": desktop.version})
+        return JSONResponse({"desktop": True, "version": desktop.version, "notes": notes})
 
     if desktop is not None:
 
@@ -266,7 +276,8 @@ def create_app(
 
             folder = bundled.bundle_dir()
             candidates = [folder / "licenses"] if folder else []
-            candidates.append(Path(__file__).resolve().parents[2] / "packaging/build/licenses")
+            build = Path(__file__).resolve().parents[2] / "packaging" / "build"
+            candidates += [build / "full" / "licenses", build / "lite" / "licenses"]
             for candidate in candidates:
                 notices = candidate / "THIRD-PARTY-NOTICES.txt"
                 if notices.is_file():

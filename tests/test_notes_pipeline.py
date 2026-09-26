@@ -84,3 +84,24 @@ def test_a_near_silent_stem_gives_a_warning_not_notes(fakes, tmp_path):
     result = transcribe_notes(tmp_path / "song.wav", instrument="other", analyze_fn=analyze)
     assert result.notes == [] and calls["transcribe"] == []
     assert result.warnings == ["There is almost no other in this song (-60 dB), so no notes."]
+
+
+def test_notes_command_explains_a_lite_install(monkeypatch, capsys):
+    from chordchart.notes import cli as notes_cli
+
+    monkeypatch.setattr(notes_cli, "notes_available", lambda: False)
+    assert notes_cli.main(["song.mp3"]) == 2
+    assert "ChordChart Notes" in capsys.readouterr().err
+
+
+def test_self_test_skips_notes_checks_in_lite(monkeypatch, tmp_path):
+    from chordchart.desktop import selftest
+
+    for name in ("_ffmpeg", "_deno", "_ytdlp", "_opencv", "_analysis"):
+        monkeypatch.setattr(selftest, name, lambda: "ok")
+    monkeypatch.setattr(selftest, "notes_available", lambda: False)
+    monkeypatch.setattr(selftest, "_demucs", lambda: pytest.fail("ran a notes check"))
+    report = tmp_path / "report.json"
+    assert selftest.run(str(report)) == 0
+    checks = json.loads(report.read_text())["checks"]
+    assert checks["notes: basic-pitch"]["skipped"] and checks["notes: torch and Demucs"]["ok"]

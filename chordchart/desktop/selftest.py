@@ -3,9 +3,10 @@
 Checks what packaging can break: the bundled ffmpeg and JavaScript runtime run,
 madmom's models load with OpenCV's fast path, yt-dlp imports, a synthesized song is
 analysed correctly with the beat-tracking worker processes (which re-run the frozen
-exe), and those workers are gone afterwards. For notes: torch runs a Demucs network
-(randomly initialised, so no download is needed) and basic-pitch's ONNX model finds
-the pitches of synthesized tones. Writes a JSON report; exit code 0 = pass.
+exe), and those workers are gone afterwards. For notes (full build only; recorded as
+skipped in lite): torch runs a Demucs network (randomly initialised, so no download
+is needed) and basic-pitch's ONNX model finds the pitches of synthesized tones.
+Writes a JSON report; exit code 0 = pass.
 """
 
 from __future__ import annotations
@@ -19,6 +20,8 @@ import wave
 from pathlib import Path
 
 import numpy as np
+
+from chordchart.notes.available import notes_available
 
 # | C | G | Am | F  C | at 100 BPM, twice: the same progression the test suite uses.
 _TRIADS = {
@@ -52,8 +55,12 @@ def run(report_path: str) -> int:
     check("yt-dlp", _ytdlp)
     check("opencv fast path", _opencv)
     check("analysis with worker processes", _analysis)
-    check("notes: torch and Demucs", _demucs)
-    check("notes: basic-pitch", _basic_pitch)
+    notes_checks = {"notes: torch and Demucs": _demucs, "notes: basic-pitch": _basic_pitch}
+    for name, fn in notes_checks.items():
+        if notes_available():
+            check(name, fn)
+        else:  # the lite app ("ChordChart") is built without the notes packages
+            checks[name] = {"ok": True, "skipped": True, "detail": "lite build", "seconds": 0}
 
     report = {"ok": all(c["ok"] for c in checks.values()), "checks": checks}
     Path(report_path).write_text(json.dumps(report, indent=2), encoding="utf-8")

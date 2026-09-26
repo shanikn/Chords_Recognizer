@@ -13,6 +13,7 @@ from pathlib import Path
 from chordchart.cli import _print_status, _time
 from chordchart.errors import ChordChartError
 from chordchart.fetch import DEFAULT_MAX_DURATION
+from chordchart.notes.available import MISSING, notes_available
 from chordchart.notes.model import INSTRUMENTS
 
 
@@ -56,6 +57,9 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     if args.end is not None and args.end <= args.start:
         parser.error("--end must be after --start")
+    if not notes_available():
+        print(f"error: {MISSING}", file=sys.stderr)
+        return 2
 
     from chordchart.notes.midi import to_midi
     from chordchart.notes.pipeline import transcribe_notes

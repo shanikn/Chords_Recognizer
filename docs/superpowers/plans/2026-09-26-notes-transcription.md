@@ -69,3 +69,25 @@ onnxruntime), pretty_midi (comes with basic-pitch).
 8. Desktop build: spec (hidden imports, basic-pitch model data, exclude lameenc),
    licenses, build and self-test.
 9. README.
+
+## Follow-up: two desktop builds (2026-09-27)
+
+`packaging/build.py --variant lite|full`:
+
+| | lite: "ChordChart" | full: "ChordChart Notes" |
+|---|---|---|
+| Contents | chords only | chords and notes |
+| App folder | 505 MB | 1.1 GB |
+| Zip | 221 MB | 430 MB |
+| License notices | 33 components | 81 components |
+
+- `packaging/variants.py` computes the notes-only packages from the dependency tree
+  (reachable from chordchart, minus what's still reachable without demucs, basic-pitch
+  and onnxruntime). The spec excludes them in lite; collect_licenses.py leaves out their
+  notices. Both read the same list.
+- `chordchart/notes/available.py` looks the notes packages up at startup (find_spec, no
+  import). `/api/app` reports `notes`; the page shows the Chords/Notes toggle only when
+  it's true, and `/api/notes` and `chordchart notes` refuse with a one-line message.
+- The self-test records the two notes checks as skipped in lite. Both builds pass.
+- Different installer AppIds, so both can be installed side by side; the executable is
+  ChordChart.exe in both.

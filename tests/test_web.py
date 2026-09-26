@@ -264,14 +264,15 @@ def _desktop_client(quits):
 
 
 def test_plain_server_is_not_a_desktop_app():
-    assert _client(lambda *a, **k: None).get("/api/app").json() == {"desktop": False}
+    info = _client(lambda *a, **k: None).get("/api/app").json()
+    assert info == {"desktop": False, "notes": True}  # dev installs have the notes packages
     assert _client(lambda *a, **k: None).get("/api/ping").status_code == 404
 
 
 def test_desktop_quit_button_and_heartbeat():
     quits = []
     client, desktop = _desktop_client(quits)
-    assert client.get("/api/app").json() == {"desktop": True, "version": "1.0.0"}
+    assert client.get("/api/app").json() == {"desktop": True, "version": "1.0.0", "notes": True}
 
     before = desktop.last_seen
     time.sleep(0.01)
@@ -366,3 +367,30 @@ def test_notes_midi_download():
 def test_notes_needs_json_like_analyze():
     client = _notes_client(lambda s, **k: _transcription())
     assert client.post("/api/notes", content="source=x").status_code == 415
+
+
+def test_lite_app_reports_no_notes_and_refuses_them():
+    calls = []
+    app = create_app(lambda *a, **k: None, notes_fn=lambda *a, **k: calls.append(a), notes=False)
+    client = TestClient(app, base_url="http://127.0.0.1:8765")
+    assert client.get("/api/app").json()["notes"] is False
+    response = client.post("/api/notes", json={"source": LINK}, headers=JSON)
+    assert response.status_code == 404
+    assert "ChordChart Notes" in response.json()["error"]
+    assert calls == []
+
+
+def test_notes_available_only_looks_packages_up(monkeypatch):
+    import importlib.util
+
+    from chordchart.notes import available
+
+    available.notes_available.cache_clear()
+    found = {"torch", "demucs", "basic_pitch"}  # onnxruntime "missing"
+    monkeypatch.setattr(
+        importlib.util, "find_spec", lambda name: object() if name in found else None
+    )
+    try:
+        assert available.notes_available() is False
+    finally:
+        available.notes_available.cache_clear()
