@@ -68,9 +68,10 @@ def _load_model():
             level = root.level
             root.setLevel(logging.ERROR)
             try:
-                from basic_pitch import ICASSP_2022_MODEL_PATH
+                from basic_pitch import FilenameSuffix, build_icassp_2022_model_path
                 from basic_pitch.inference import Model
             finally:
                 root.setLevel(level)
-            _model = Model(ICASSP_2022_MODEL_PATH)
+            # Always the ONNX file: the desktop app bundles only that one.
+            _model = Model(build_icassp_2022_model_path(FilenameSuffix.onnx))
         return _model

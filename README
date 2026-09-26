@@ -20,6 +20,8 @@ Setup (Windows)
 ---------------
     winget install --id Gyan.FFmpeg -e     # then open a new terminal
     uv sync                                # builds madmom from source (needs MSVC Build Tools)
+The lockfile covers Windows and Linux only (see [tool.uv] in pyproject.toml: basic-pitch
+and demucs can't be resolved on macOS with Python 3.12 and NumPy 2).
 
 Usage
 -----
@@ -38,6 +40,23 @@ Web page
     uv run chordchart serve --port 9000 --no-browser
 Paste a link (or a file path), optionally a start/end, press Analyze. Progress and the
 chart appear on the page. The server only listens on this computer; Ctrl+C stops it.
+
+Notes (main instrument -> piano roll and MIDI)
+---------------------------------------------
+On the web page, switch to Notes, pick an instrument (Auto = the loudest) and press
+Transcribe notes. It uses the link, start and end of the form. The piano roll appears
+under the chord sheet, bar lines and chord names lined up; Download MIDI saves the notes.
+    uv run chordchart notes "https://www.youtube.com/watch?v=..." --start 1:05 --end 1:40
+    uv run chordchart notes song.mp3 --instrument bass -o bass.mid   # or -o notes.json
+How: Demucs (htdemucs_6s) splits the song into stems; vocals and drums are dropped; the
+loudest of bass, guitar, piano and other is transcribed by Spotify's basic-pitch; notes
+are snapped to 16ths of the chart's beats, and very short or quiet ones are dropped.
+Speed: separating the stems runs on the CPU at about twice the audio's length (a 35 s
+section takes ~80 s, a whole 4-minute song ~8 min), so prefer a section. The stems are
+cached, so another instrument for the same section takes seconds.
+The Demucs model (53 MB, MIT) is downloaded once, on first use, into
+%LOCALAPPDATA%\ChordChart\models. Cached stems: %LOCALAPPDATA%\chordchart\cache\stems
+(`chordchart cache info|clear` include them).
 
 Pasting YouTube links
 ---------------------

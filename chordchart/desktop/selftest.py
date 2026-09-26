@@ -3,7 +3,9 @@
 Checks what packaging can break: the bundled ffmpeg and JavaScript runtime run,
 madmom's models load with OpenCV's fast path, yt-dlp imports, a synthesized song is
 analysed correctly with the beat-tracking worker processes (which re-run the frozen
-exe), and those workers are gone afterwards. Writes a JSON report; exit code 0 = pass.
+exe), and those workers are gone afterwards. For notes: torch runs a Demucs network
+(randomly initialised, so no download is needed) and basic-pitch's ONNX model finds
+the pitches of synthesized tones. Writes a JSON report; exit code 0 = pass.
 """
 
 from __future__ import annotations
@@ -50,6 +52,8 @@ def run(report_path: str) -> int:
     check("yt-dlp", _ytdlp)
     check("opencv fast path", _opencv)
     check("analysis with worker processes", _analysis)
+    check("notes: torch and Demucs", _demucs)
+    check("notes: basic-pitch", _basic_pitch)
 
     report = {"ok": all(c["ok"] for c in checks.values()), "checks": checks}
     Path(report_path).write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -125,6 +129,49 @@ def _analysis():
         "worker_processes": len(workers),
         "elapsed": song.elapsed,
     }
+
+
+def _demucs():
+    import torch
+    from demucs.apply import apply_model
+    from demucs.htdemucs import HTDemucs
+
+    from chordchart.notes.model import INSTRUMENTS
+
+    sources = ["drums", "bass", "other", "vocals", "guitar", "piano"]
+    model = HTDemucs(sources=sources).eval()
+    with torch.no_grad():
+        out = apply_model(model, torch.randn(1, 2, 44_100) * 0.1, split=True)
+    assert tuple(out.shape) == (1, 6, 2, 44_100), out.shape
+    assert set(INSTRUMENTS) <= set(sources)
+    return f"torch {torch.__version__}, output {tuple(out.shape)}"
+
+
+def _basic_pitch():
+    from chordchart.notes.transcribe import transcribe
+
+    sr, melody = 44_100, [57, 60, 64, 67]
+    t = np.arange(int(0.5 * sr)) / sr
+    parts = []
+    for pitch in melody:
+        f = 440 * 2 ** ((pitch - 69) / 12)
+        tone = sum(0.5**k * np.sin(2 * np.pi * f * (k + 1) * t) for k in range(4))
+        parts += [tone * np.exp(-3 * t), np.zeros(int(0.1 * sr))]
+    x = np.concatenate(parts)
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "tones.wav"
+        with wave.open(str(path), "wb") as f:
+            f.setnchannels(1)
+            f.setsampwidth(2)
+            f.setframerate(sr)
+            f.writeframes((0.5 * x / np.abs(x).max() * 32767).astype("<i2").tobytes())
+        notes = transcribe(path, "piano")
+    found = []
+    for i in range(len(melody)):
+        near = [n for n in notes if abs(n.start - i * 0.6) < 0.1]
+        found.append(max(near, key=lambda n: n.velocity).pitch if near else None)
+    assert found == melody, f"expected {melody}, found {found}"
+    return f"{len(notes)} notes, melody {found}"
 
 
 def _write_progression(path: Path, bpm: float = 100.0, sr: int = 44_100) -> None:
