@@ -81,3 +81,9 @@ def test_notes_outside_the_grid_are_clipped_or_dropped():
 def test_result_is_sorted_by_time_then_pitch():
     notes = quantize([_note(1.0, 1.5, 64), _note(0.0, 0.5, 67), _note(0.0, 0.5, 60)], GRID)
     assert [(n.step, n.pitch) for n in notes] == [(0, 60), (0, 67), (8, 64)]
+
+
+def test_a_double_onset_merges_into_one_note():
+    # basic-pitch often starts the same note twice, a 16th apart: 1 step, then the rest.
+    [note] = quantize([_note(0.0, 0.1), _note(0.125, 0.5)], GRID)
+    assert (note.step, note.steps) == (0, 4)

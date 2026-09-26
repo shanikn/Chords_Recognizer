@@ -7,7 +7,9 @@ notes start and end anywhere; each end is moved to the nearest grid point.
 Filtering happens before snapping, on what basic-pitch heard:
 - notes shorter than half a 16th are blips (a pick noise, a bleed from another stem);
 - notes quieter than MIN_VELOCITY are mostly bleed and harmonics.
-After snapping, two notes of the same pitch that overlap are one note.
+After snapping, two notes of the same pitch that overlap are one note, and so is a
+1-step note followed at once by the same pitch: basic-pitch often detects a second
+onset a moment into a note (seen on piano), which would otherwise show as a stutter.
 """
 
 from __future__ import annotations
@@ -79,8 +81,8 @@ def quantize(notes: Sequence[Note], grid: Sequence[float]) -> list[Note]:
         i = min(max(bisect.bisect_right(grid, note.start) - 1, 0), len(grid) - 2)
         if note.end - note.start < (grid[i + 1] - grid[i]) / 2:
             continue
-        first = _nearest(grid, note.start)
-        last = max(_nearest(grid, note.end), first + 1)
+        first = nearest_step(grid, note.start)
+        last = max(nearest_step(grid, note.end), first + 1)
         if first >= len(grid) - 1:  # starts on the chart's very end
             continue
         snapped.append(
@@ -89,7 +91,8 @@ def quantize(notes: Sequence[Note], grid: Sequence[float]) -> list[Note]:
     return _merge(snapped)
 
 
-def _nearest(grid: Sequence[float], t: float) -> int:
+def nearest_step(grid: Sequence[float], t: float) -> int:
+    """Index of the grid point closest to `t`."""
     i = bisect.bisect_left(grid, t)
     if i == 0:
         return 0
@@ -103,8 +106,11 @@ def _merge(notes: list[Note]) -> list[Note]:
     open_by_pitch: dict[int, int] = {}  # pitch -> index in merged of its latest note
     for note in sorted(notes, key=lambda n: (n.step, n.pitch)):
         j = open_by_pitch.get(note.pitch)
-        if j is not None and note.step < merged[j].step + merged[j].steps:
-            prev = merged[j]
+        prev = merged[j] if j is not None else None
+        if prev and (
+            note.step < prev.step + prev.steps  # overlap
+            or (prev.steps == 1 and note.step == prev.step + 1)  # double onset
+        ):
             end_step = max(prev.step + prev.steps, note.step + note.steps)
             merged[j] = replace(
                 prev,
