@@ -20,6 +20,16 @@ DEV_UPDATE_HINT = "try: uv lock --upgrade-package yt-dlp && uv sync"
 UPDATE_HINT = DEV_UPDATE_HINT
 
 
+def app_data_dir() -> Path:
+    """Per-user app folder: %LOCALAPPDATA%\\ChordChart (logs, yt-dlp updates, caches).
+    Windows paths are case-insensitive, so it's the same folder as download.py's
+    `%LOCALAPPDATA%\\chordchart\\cache`."""
+    import os
+
+    base = os.environ.get("LOCALAPPDATA")
+    return Path(base) / "ChordChart" if base else Path.home() / ".chordchart"
+
+
 def bundle_dir() -> Path | None:
     """The unpacked app folder when frozen (PyInstaller's `_internal`), else None."""
     return Path(sys._MEIPASS) if FROZEN else None  # type: ignore[attr-defined]
