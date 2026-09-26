@@ -243,13 +243,18 @@ def _run_models(stage, processors, recognizer, audio, wav, beats_per_bar, parall
     ]
     if not parallel:
         return tuple(stage.run(*s) for s in model_stages)
-    # The three models only read the audio and each has its own processors, so they
-    # can run at the same time. Beat tracking does its heavy work in its worker
-    # processes; the chord and key CNNs spend theirs in OpenCV, which releases the
-    # GIL. So threads are enough here.
-    with ThreadPoolExecutor(len(model_stages), thread_name_prefix="stage") as pool:
-        futures = [pool.submit(stage.run, *s) for s in model_stages]
-        return tuple(f.result() for f in futures)
+    # Beat tracking runs alongside the other two: it only reads the audio, and does its
+    # heavy work in its own worker processes. Chords and key both run CNNs through
+    # OpenCV and go one after the other: with both at once, the packaged app failed
+    # once on a clean Windows (Sandbox) with "Unknown C++ exception from OpenCV code"
+    # (2026-09-26; not reproducible locally). Running them in sequence avoids
+    # concurrent OpenCV calls and halves their peak memory.
+    beats_stage, chords_stage, key_stage = model_stages
+    with ThreadPoolExecutor(2, thread_name_prefix="stage") as pool:
+        beats = pool.submit(stage.run, *beats_stage)
+        cnns = pool.submit(lambda: (stage.run(*chords_stage), stage.run(*key_stage)))
+        segments, key = cnns.result()
+        return beats.result(), segments, key
 
 
 class _Stages:
