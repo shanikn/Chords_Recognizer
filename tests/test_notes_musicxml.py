@@ -41,10 +41,30 @@ def _ties(note):
     return sorted(t.get("type") for t in note.findall("tie"))
 
 
+def _voices(measure, staff):
+    """{voice: [notes]} of one staff in one measure."""
+    voices = {}
+    for n in _staff_notes(measure, staff):
+        voices.setdefault(n.findtext("voice"), []).append(n)
+    return voices
+
+
 def _staff_durations(measure, staff):
-    return sum(
-        int(n.findtext("duration")) for n in _staff_notes(measure, staff) if n.find("chord") is None
-    )
+    """The staff's length in the measure; every voice on it must fill exactly that."""
+    lengths = {
+        voice: sum(int(n.findtext("duration")) for n in notes if n.find("chord") is None)
+        for voice, notes in _voices(measure, staff).items()
+    }
+    assert len(set(lengths.values())) == 1, lengths
+    return next(iter(lengths.values()))
+
+
+def _events(notes):
+    return [
+        ("rest" if n.find("rest") is not None else _pitch(n), int(n.findtext("duration")), _ties(n))
+        for n in notes
+        if n.find("chord") is None
+    ]
 
 
 def test_score_structure():
@@ -105,19 +125,53 @@ def test_a_note_across_a_barline_is_tied():
     assert end_of_first.find("notations/tied").get("type") == "start"
 
 
-def test_a_note_held_under_a_moving_one_is_tied_within_the_bar():
-    # On one staff: E4 held for the whole bar, G4 on beat 2 -> E4 is split and tied.
+def test_a_held_note_goes_to_a_second_voice_instead_of_being_split():
+    # On one staff: E4 held for the whole bar, G4 on beat 2. E4 is one whole note in
+    # voice 2 (stems down); the moving line, voice 1 (stems up), rests around G4.
     root = _parse(_transcription([_note(0, 16, 64), _note(4, 4, 67)]))
-    staff1 = _staff_notes(root.find("part/measure"), 1)
-    events = [
-        (_pitch(n), n.findtext("duration"), n.find("chord") is not None, _ties(n)) for n in staff1
-    ]
-    assert events == [
-        ("E4", "4", False, ["start"]),
-        ("E4", "4", False, ["start", "stop"]),
-        ("G4", "4", True, []),
-        ("E4", "8", False, ["stop"]),
-    ]
+    voices = _voices(root.find("part/measure"), 1)
+    assert set(voices) == {"1", "2"}
+    assert _events(voices["1"]) == [("rest", 4, []), ("G4", 4, []), ("rest", 8, [])]
+    assert _events(voices["2"]) == [("E4", 16, [])]
+    assert voices["2"][0].findtext("type") == "whole"
+    assert {n.findtext("stem") for n in voices["1"] if n.find("rest") is None} == {"up"}
+    assert voices["2"][0].findtext("stem") == "down"
+
+
+def test_bass_pedal_under_an_arpeggio():
+    # C3 held for the bar while eighths move above it, all on the bass staff.
+    arpeggio = [_note(2 * i, 2, pitch) for i, pitch in enumerate([48, 52, 55, 52, 48, 52, 55, 52])]
+    root = _parse(_transcription([_note(0, 16, 48), *arpeggio]))
+    measure = root.find("part/measure")
+    voices = _voices(measure, 2)
+    assert set(voices) == {"5", "6"}  # the bass staff's voices
+    assert [e[0] for e in _events(voices["5"])] == ["C3", "E3", "G3", "E3", "C3", "E3", "G3", "E3"]
+    assert _events(voices["6"]) == [("C3", 16, [])]
+    assert not any(_ties(n) for n in _staff_notes(measure, 2))  # nothing split
+    assert _staff_durations(measure, 2) == 16
+
+
+def test_a_held_note_across_a_barline_is_tied_in_its_voice():
+    # D5 from beat 3 of bar 1 to beat 2 of bar 2, with a quarter note moving under it.
+    root = _parse(_transcription([_note(8, 12, 74), _note(12, 4, 67), _note(16, 4, 69)]))
+    first, second = root.findall("part/measure")[:2]
+    held_1, held_2 = _voices(first, 1)["2"], _voices(second, 1)["2"]
+    assert _events(held_1) == [("rest", 8, []), ("D5", 8, ["start"])]
+    assert _events(held_2)[0] == ("D5", 4, ["stop"])
+    assert _staff_durations(first, 1) == _staff_durations(second, 1) == 16
+
+
+def test_a_bar_without_held_notes_has_one_voice_per_staff():
+    root = _parse(_transcription([_note(0, 4, 64), _note(4, 4, 67), _note(0, 8, 48)]))
+    measure = root.find("part/measure")
+    assert set(_voices(measure, 1)) == {"1"} and set(_voices(measure, 2)) == {"5"}
+    assert measure.find("note/stem") is None  # one voice: the renderer picks stems
+    assert [b.findtext("duration") for b in measure.findall("backup")] == ["16"]
+
+
+def test_notes_ending_together_that_start_together_stay_one_chord():
+    root = _parse(_transcription([_note(0, 8, 64), _note(0, 8, 67), _note(8, 8, 69)]))
+    assert set(_voices(root.find("part/measure"), 1)) == {"1"}
 
 
 def test_notes_starting_together_are_a_chord():

@@ -1,17 +1,24 @@
 """The Transcription as sheet music: MusicXML 4.0, a piano grand staff.
 
 Layout: one part, two staves. Notes from middle C (MIDI 60) up go on the treble staff,
-lower ones on the bass staff; each staff is one voice. Time runs on the chart's grid,
-so one division is one 16th (`divisions` = steps per beat = 4, beat = quarter note).
+lower ones on the bass staff. Time runs on the chart's grid, so one division is one 16th
+(`divisions` = steps per beat = 4, beat = quarter note).
+
+Voices: each staff has up to two. A note is *held* if another note on its staff starts
+while it sounds (or starts with it and ends sooner): a pedal bass under an arpeggio, a
+long top note over a moving line. Held notes go to the second voice (stems down), and
+the rest to the first (stems up); a bar with no held notes has one voice and the
+renderer picks the stems. The first voice then never overlaps itself, so its notes
+are written as they are. Treble staff: voices 1 and 2; bass staff: voices 5 and 6.
 
 Measures are the chart's bars. A pickup before the first downbeat is an implicit
 measure 0; a short last bar (the song stops mid-bar) is filled with rests.
 
-Rhythm: each staff is cut at every note start, note end and barline. What sounds
+Rhythm: each voice is cut at every note start, note end and barline. What sounds
 between two cuts is one chord (or a rest if nothing does), and a note that goes on past
-a cut is tied to its continuation: that's how a held note under a moving one, and a
-note across a barline, come out. Lengths that aren't one written note value (five
-16ths, say) are split into tied notes.
+a cut is tied to its continuation: that's how a note across a barline comes out (and,
+rarely, two held notes that overlap in the second voice). Lengths that aren't one
+written note value (five 16ths, say) are split into tied notes.
 
 Key signature: the chord analysis's key (minor keys use their relative major's
 signature); black keys are spelled with sharps in sharp keys and flats in flat keys.
@@ -20,6 +27,7 @@ Meter: `meter`/4, as the chart counts beats in quarter notes.
 
 from __future__ import annotations
 
+import bisect
 import xml.etree.ElementTree as ET
 from itertools import pairwise
 
@@ -27,6 +35,7 @@ from chordchart.notes.midi import PROGRAMS
 from chordchart.notes.model import Transcription
 
 MIDDLE_C = 60
+VOICES = {1: (1, 2), 2: (5, 6)}  # staff -> (first voice, second voice for held notes)
 _DOCTYPE = (
     '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" '
     '"http://www.musicxml.org/dtds/partwise.dtd">'
@@ -82,8 +91,8 @@ def to_musicxml(transcription: Transcription) -> bytes:
 
     notes = [(n.step, n.step + n.steps, n.pitch, n.velocity) for n in t.notes if n.steps > 0]
     staves = {
-        1: [n for n in notes if n[2] >= MIDDLE_C],
-        2: [n for n in notes if n[2] < MIDDLE_C],
+        1: _split_voices([n for n in notes if n[2] >= MIDDLE_C]),
+        2: _split_voices([n for n in notes if n[2] < MIDDLE_C]),
     }
     measures = _measures(t)
     for index, (start, length, implicit) in enumerate(measures):
@@ -93,10 +102,17 @@ def to_musicxml(transcription: Transcription) -> bytes:
             measure.set("implicit", "yes")
         if index == 0:
             _attributes(measure, t, fifths)
+        end = start + length
         for staff in (1, 2):
-            if staff == 2:
-                ET.SubElement(ET.SubElement(measure, "backup"), "duration").text = str(length)
-            _write_staff(measure, staves[staff], start, start + length, staff, names)
+            moving, held = staves[staff]
+            held_here = [n for n in held if n[0] < end and n[1] > start]
+            chunks = [(moving, VOICES[staff][0], "up" if held_here else None)]
+            if held_here:
+                chunks.append((held_here, VOICES[staff][1], "down"))
+            for voice_notes, voice, stem in chunks:
+                if len(measure.findall("note")):  # every voice after the first starts over
+                    ET.SubElement(ET.SubElement(measure, "backup"), "duration").text = str(length)
+                _write_voice(measure, voice_notes, start, end, staff, voice, stem, names)
         if index == len(measures) - 1:
             barline = ET.SubElement(measure, "barline", location="right")
             ET.SubElement(barline, "bar-style").text = "light-heavy"
@@ -143,11 +159,26 @@ def _attributes(measure: ET.Element, t: Transcription, fifths: int) -> None:
     ET.SubElement(direction, "sound", tempo=str(round(t.bpm)))
 
 
-def _write_staff(measure, notes, a: int, b: int, staff: int, names: list[str]) -> None:
-    """One staff of one measure [a, b): chords and rests between the cuts, tied across."""
+def _split_voices(notes: list[tuple]) -> tuple[list[tuple], list[tuple]]:
+    """(moving, held) notes of one staff: held ones sound on while another one starts."""
+    starts = sorted(n[0] for n in notes)
+    first_end: dict[int, int] = {}  # start -> earliest end of the notes starting there
+    for start, end, *_ in notes:
+        first_end[start] = min(end, first_end.get(start, end))
+    moving, held = [], []
+    for note in notes:
+        start, end = note[0], note[1]
+        later = bisect.bisect_right(starts, start)
+        overlapped = later < len(starts) and starts[later] < end
+        (held if overlapped or first_end[start] < end else moving).append(note)
+    return moving, held
+
+
+def _write_voice(measure, notes, a, b, staff, voice, stem, names: list[str]) -> None:
+    """One voice of one measure [a, b): chords and rests between the cuts, tied across."""
     inside = [n for n in notes if n[0] < b and n[1] > a]
     if not inside:
-        _note(measure, None, b - a, staff, whole_measure=True)
+        _note(measure, None, b - a, staff, voice, whole_measure=True)
         return
     cuts = sorted({a, b} | {max(a, min(b, x)) for s, e, *_ in inside for x in (s, e)})
     for x, y in pairwise(cuts):
@@ -155,7 +186,7 @@ def _write_staff(measure, notes, a: int, b: int, staff: int, names: list[str]) -
         pieces = _split(y - x)
         if not sounding:
             for piece in pieces:
-                _note(measure, None, piece, staff)
+                _note(measure, None, piece, staff, voice)
             continue
         for i, piece in enumerate(pieces):
             for j, (start, end, pitch, velocity) in enumerate(sounding):
@@ -165,7 +196,7 @@ def _write_staff(measure, notes, a: int, b: int, staff: int, names: list[str]) -
                 if i < len(pieces) - 1 or end > y:
                     ties.append("start")
                 spelled = (names[pitch % 12], pitch // 12 - 1, velocity)
-                _note(measure, spelled, piece, staff, chord=j > 0, ties=ties)
+                _note(measure, spelled, piece, staff, voice, stem, chord=j > 0, ties=ties)
 
 
 def _split(length: int) -> list[int]:
@@ -178,7 +209,9 @@ def _split(length: int) -> list[int]:
     return pieces
 
 
-def _note(measure, spelled, length, staff, chord=False, ties=(), whole_measure=False) -> None:
+def _note(
+    measure, spelled, length, staff, voice, stem=None, chord=False, ties=(), whole_measure=False
+) -> None:
     note = ET.SubElement(measure, "note")
     if chord:
         ET.SubElement(note, "chord")
@@ -197,12 +230,14 @@ def _note(measure, spelled, length, staff, chord=False, ties=(), whole_measure=F
     ET.SubElement(note, "duration").text = str(length)
     for kind in ties:
         ET.SubElement(note, "tie", type=kind)
-    ET.SubElement(note, "voice").text = str(staff)
+    ET.SubElement(note, "voice").text = str(voice)
     if not whole_measure:
         value = next(v for v in _VALUES if v[0] == length)
         ET.SubElement(note, "type").text = value[1]
         if value[2]:
             ET.SubElement(note, "dot")
+    if stem and spelled is not None:
+        ET.SubElement(note, "stem").text = stem
     ET.SubElement(note, "staff").text = str(staff)
     if ties:
         notations = ET.SubElement(note, "notations")
