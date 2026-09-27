@@ -19,6 +19,12 @@ dependencies = [
     # `chordchart serve`: local web UI
     "fastapi>=0.141",
     "uvicorn>=0.54",
+    # Notes transcription (chordchart/notes): Demucs splits the song into instrument
+    # stems, basic-pitch turns one stem into notes. basic-pitch runs its ONNX model
+    # through onnxruntime; see [tool.uv] below for why tensorflow is left out.
+    "demucs>=4.1.0",
+    "basic-pitch>=0.4.0",
+    "onnxruntime>=1.20",
 ]
 
 [project.scripts]
@@ -28,6 +34,17 @@ chordchart = "chordchart.cli:main"
 dev = ["httpx2>=2.13", "pytest>=8", "ruff>=0.6", "scipy>=1.13"]
 # Windows desktop app (packaging/): the window, and the build tool.
 desktop = ["pywebview>=6.2", "pyinstaller>=6.22"]
+
+[tool.uv]
+# basic-pitch 0.4.0 requires tensorflow<2.15.1, which has no Python 3.12 build, so it
+# can't be installed as published. It only needs one model runtime and picks onnxruntime
+# when tensorflow is absent, so tensorflow is never installed.
+# It also pins resampy<0.4.3, whose versions import pkg_resources, which current
+# setuptools no longer ships; 0.4.3 has the same API without that import.
+override-dependencies = ["tensorflow; sys_platform == 'never'", "resampy>=0.4.3"]
+# The lockfile covers Windows and Linux only. On macOS, basic-pitch requires
+# tensorflow-macos<2.15.1 (no Python 3.12 build) and demucs pins numpy<2 on Intel Macs.
+environments = ["sys_platform == 'win32'", "sys_platform == 'linux'"]
 
 [build-system]
 requires = ["hatchling"]
@@ -45,8 +62,9 @@ markers = [
     "slow: runs madmom models on generated audio (seconds per test)",
     "accuracy: needs locally stored annotated audio",
     "network: talks to YouTube; run explicitly with -m network",
+    "browser: drives the page in headless Chrome; uv run --with playwright pytest -m browser",
 ]
-addopts = "-rs -m 'not slow and not accuracy and not network'"
+addopts = "-rs -m 'not slow and not accuracy and not network and not browser'"
 # Any warning raised from madmom code fails the test run (spec §2.1), except the one
 # known deprecation below. Later entries take precedence over earlier ones.
 filterwarnings = [

@@ -3,6 +3,7 @@
 chordchart <file-or-link> [--start T] [--end T] [--format txt|json] [-o FILE] ...
 chordchart                  prompts for the link, then start/end
 chordchart --clipboard      reads the link from the clipboard
+chordchart notes <file-or-link> [--instrument X] [-o FILE]   main instrument -> MIDI
 chordchart serve [--port N]  local web page
 chordchart cache info | clear
 """
@@ -17,6 +18,7 @@ from chordchart import analysis_cache, interactive
 from chordchart.download import CacheSummary, cache_summary, clear_cache, default_cache_dir
 from chordchart.errors import ChordChartError
 from chordchart.fetch import DEFAULT_MAX_DURATION
+from chordchart.notes import stems as stems_cache  # no torch at import
 from chordchart.pipeline import analyze
 from chordchart.render.text import render_text
 from chordchart.timecode import parse_time
@@ -102,6 +104,10 @@ def main(argv: list[str] | None = None) -> int:
         return cache_main(argv[1:])
     if argv[:1] == ["serve"]:
         return serve_main(argv[1:])
+    if argv[:1] == ["notes"]:
+        from chordchart.notes.cli import main as notes_main  # imports torch: only here
+
+        return notes_main(argv[1:])
 
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -183,24 +189,34 @@ def cache_main(argv: list[str]) -> int:
     args = build_cache_parser().parse_args(argv)
     folder = _downloads_dir()
     analyses = default_cache_dir() / "analysis"
+    stems = default_cache_dir() / "stems"
     try:
         if args.action == "info":
             print(f"cache: {folder}\n{_describe(cache_summary(folder))}")
             described = _describe_analyses(*analysis_cache.summary(analyses))
             print(f"analysis cache: {analyses}\n{described}")
+            print(f"instrument stems: {stems}\n{_describe_stems(*stems_cache.summary(stems))}")
         else:
             removed = clear_cache(folder)
             removed_analyses = analysis_cache.clear(analyses)
-            if removed.size == 0 and removed_analyses[1] == 0:
+            removed_stems = stems_cache.clear(stems)
+            if removed.size == 0 and removed_analyses[1] == 0 and removed_stems[1] == 0:
                 print(f"cache is empty: {folder}")
             else:
                 print(f"removed {_describe(removed)} from {folder}")
                 if removed_analyses[1]:
                     print(f"removed {_describe_analyses(*removed_analyses)} from {analyses}")
+                if removed_stems[1]:
+                    print(f"removed {_describe_stems(*removed_stems)} from {stems}")
     except ChordChartError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return exc.exit_code
     return 0
+
+
+def _describe_stems(count: int, size: int) -> str:
+    noun = "song" if count == 1 else "songs"
+    return f"{count} {noun} ({size / 1e6:.1f} MB)"
 
 
 def _describe_analyses(count: int, size: int) -> str:

@@ -20,6 +20,7 @@
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }  /* also for elements styled display: flex */
   body {
     margin: 0; background: var(--bg); color: var(--text);
     font: 18px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -82,6 +83,54 @@
   }
   button.quit:hover { color: var(--text); border-color: var(--muted); }
   .closed { margin-top: 40px; font-size: 22px; }
+
+  /* Chords/Notes toggle */
+  .views {
+    display: inline-flex; margin-top: 22px; padding: 3px; gap: 3px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  }
+  .views button {
+    background: transparent; color: var(--muted); font-weight: 600; padding: 8px 20px;
+  }
+  .views button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); }
+
+  /* Notes panel */
+  .notes {
+    margin-top: 22px; padding: 20px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px;
+  }
+  .notes-controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; }
+  select {
+    font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+  }
+  .hint { margin: 12px 0 0; font-size: 15px; color: var(--muted); }
+  .bar { height: 8px; margin-top: 14px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width 0.3s; }
+  .roll {
+    display: flex; margin-top: 16px; border: 1px solid var(--line); border-radius: 8px;
+    overflow: hidden; background: var(--bg);
+  }
+  .roll-keys { flex: none; border-right: 1px solid var(--line); }
+  .roll-scroll { overflow-x: auto; flex: 1; }
+  canvas { display: block; }
+  .notes-footer {
+    display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between;
+    margin-top: 14px;
+  }
+  a.button {
+    display: inline-block; font-weight: 600; padding: 9px 18px; border-radius: 8px;
+    background: var(--accent); color: var(--accent-text); text-decoration: none;
+  }
+  #notes-info { font-size: 15px; color: var(--muted); }
+  .views.small { margin-top: 16px; }
+  .views.small button { padding: 6px 14px; font-size: 15px; }
+  .downloads { display: flex; flex-wrap: wrap; gap: 10px; }
+  /* Sheet music is drawn black on white, so it sits on "paper" in both themes. */
+  .sheet {
+    margin-top: 16px; padding: 12px; border: 1px solid var(--line); border-radius: 8px;
+    background: #ffffff; color: #1d1d1f; overflow-x: auto; min-height: 60px;
+  }
 </style>
 </head>
 <body>
@@ -103,18 +152,61 @@
     <button id="go" type="submit">Analyze</button>
   </form>
 
+  <div id="views" class="views" role="group" aria-label="View" hidden>
+    <button type="button" id="view-chords" aria-pressed="true">Chords</button>
+    <button type="button" id="view-notes" aria-pressed="false">Notes</button>
+  </div>
+
   <ol id="steps" hidden></ol>
   <div id="error" class="error" role="alert" hidden></div>
   <div id="chart-wrap" class="chart-wrap" hidden><pre id="chart"></pre></div>
+
+  <section id="notes" class="notes" hidden>
+    <div class="notes-controls">
+      <label>Instrument
+        <select id="instrument">
+          <option value="auto">Auto (loudest)</option>
+          <option value="piano">Piano</option>
+          <option value="guitar">Guitar</option>
+          <option value="bass">Bass</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+      <button id="transcribe" type="button">Transcribe notes</button>
+    </div>
+    <p class="hint">Uses the link, start and end above. Separating the instruments takes
+      about twice the length of the audio; after that, switching instrument takes seconds.</p>
+    <div id="notes-bar" class="bar" hidden><div></div></div>
+    <div id="notes-views" class="views small" role="group" aria-label="Show notes as" hidden>
+      <button type="button" id="show-roll" aria-pressed="true">Piano roll</button>
+      <button type="button" id="show-sheet" aria-pressed="false">Sheet</button>
+    </div>
+    <div id="roll" class="roll" hidden>
+      <canvas id="roll-keys" class="roll-keys"></canvas>
+      <div class="roll-scroll"><canvas id="roll-notes"></canvas></div>
+    </div>
+    <div id="sheet" class="sheet" hidden></div>
+    <div id="notes-footer" class="notes-footer" hidden>
+      <span id="notes-info"></span>
+      <span class="downloads">
+        <a id="midi" class="button" href="#" download>Download MIDI</a>
+        <a id="musicxml" class="button" href="#" download>Download MusicXML</a>
+      </span>
+    </div>
+  </section>
+
   <div id="timer" class="timer" aria-live="off" hidden></div>
 
-  <footer>Runs on this computer only. Chord and beat models: madmom (non-commercial use).<span id="version"></span></footer>
+  <footer>Runs on this computer only. Chord and beat models: madmom (non-commercial use).
+    <span id="notes-credit" hidden>Notes: Demucs and basic-pitch.</span><span id="version"></span></footer>
 </main>
 
 <script>
 const $ = (id) => document.getElementById(id);
 const form = $("form"), go = $("go"), steps = $("steps"), errorBox = $("error");
 const chartWrap = $("chart-wrap"), chart = $("chart"), timer = $("timer");
+const notesPanel = $("notes"), transcribe = $("transcribe"), notesBar = $("notes-bar");
+const roll = $("roll"), notesFooter = $("notes-footer"), notesInfo = $("notes-info");
 
 function showError(message) {
   errorBox.textContent = message;
@@ -122,11 +214,16 @@ function showError(message) {
 }
 
 // messages: [{text, seconds, running}]. Several stages (beats, chords, key) can be
-// running at once; each shows a spinner until it finishes and gets its time.
-function showSteps(messages, jobRunning) {
+// running at once; each shows a spinner until it finishes and gets its time. A notes
+// job also reports `progress` (0..1) while it separates the instruments.
+function showSteps(messages, jobRunning, progress) {
   const items = messages.map((m) => {
     const li = document.createElement("li");
-    li.textContent = m.seconds == null ? m.text : `${m.text} — ${m.seconds.toFixed(1)} s`;
+    let text = m.seconds == null ? m.text : `${m.text} — ${m.seconds.toFixed(1)} s`;
+    if (m.running && m.text === "separating instruments" && progress != null) {
+      text += ` — ${Math.round(progress * 100)}%`;
+    }
+    li.textContent = text;
     if (jobRunning && m.running) li.className = "current";
     return li;
   });
@@ -134,7 +231,7 @@ function showSteps(messages, jobRunning) {
   steps.hidden = items.length === 0;
 }
 
-// Timer: from pressing Analyze until the chart (or an error) appears, so it's the
+// Timer: from pressing the button until the result (or an error) appears, so it's the
 // time you actually waited, download included.
 let timerStart = 0, timerTick = null;
 
@@ -146,11 +243,11 @@ function formatDuration(ms) {
   return minutes ? `${minutes}:${rest.padStart(4, "0")}` : `${rest} s`;
 }
 
-function startTimer() {
+function startTimer(label) {
   timerStart = performance.now();
   timer.classList.remove("done");
   timer.hidden = false;
-  const show = () => { timer.textContent = `Analyzing… ${formatDuration(performance.now() - timerStart)}`; };
+  const show = () => { timer.textContent = `${label}… ${formatDuration(performance.now() - timerStart)}`; };
   show();
   timerTick = setInterval(show, 100);
 }
@@ -162,24 +259,228 @@ function stopTimer(finished) {
   timer.classList.toggle("done", finished);
 }
 
-// Returns true when the chart arrived, false on an error.
-async function poll(jobId) {
+// Polls until the job ends. Returns true when it finished (after calling onDone),
+// false on an error.
+async function poll(jobId, onDone) {
   while (true) {
     const response = await fetch(`/api/jobs/${jobId}`);
     const job = await response.json();
     if (!response.ok) throw new Error(job.error || `HTTP ${response.status}`);
-    showSteps(job.messages, job.state === "running");
-    if (job.state === "done") { chart.textContent = job.chart; chartWrap.hidden = false; return true; }
+    showSteps(job.messages, job.state === "running", job.progress);
+    if (job.progress != null) {
+      notesBar.hidden = job.state !== "running";
+      notesBar.firstElementChild.style.width = `${job.progress * 100}%`;
+    }
+    if (job.state === "done") { onDone(job); return true; }
     if (job.state === "error") { showError(job.error); return false; }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 }
 
+// One job at a time, like the server: both buttons are disabled while one runs.
+async function runJob(url, extra, button, busyText, onDone) {
+  const idleText = button.textContent;
+  go.disabled = transcribe.disabled = true;
+  button.textContent = busyText;
+  errorBox.hidden = true;
+  showSteps([], false);
+  startTimer(busyText.replace(/…$/, ""));
+  let finished = false;
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: $("source").value, start: $("start").value, end: $("end").value, ...extra }),
+    });
+    const body = await response.json();
+    if (!response.ok) { showError(body.error || `HTTP ${response.status}`); return; }
+    finished = await poll(body.job_id, (job) => onDone(job, body.job_id));
+  } catch (err) {
+    showError(`lost contact with the ChordChart server (${err.message}). Is it still running?`);
+  } finally {
+    stopTimer(finished);
+    notesBar.hidden = true;
+    go.disabled = transcribe.disabled = false;
+    button.textContent = idleText;
+  }
+}
+
+// Chords/Notes toggle. Notes shows the chord chart too, with the piano roll under it.
+function setView(view) {
+  $("view-chords").setAttribute("aria-pressed", view === "chords");
+  $("view-notes").setAttribute("aria-pressed", view === "notes");
+  notesPanel.hidden = view !== "notes";
+  if (view === "notes") showNotesView();  // drawing needs a visible panel
+}
+$("view-chords").addEventListener("click", () => setView("chords"));
+$("view-notes").addEventListener("click", () => setView("notes"));
+
+// Piano roll: one row per semitone, one column per 16th note of the chart's grid.
+const NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const noteName = (pitch) => `${NAMES[pitch % 12]}${Math.floor(pitch / 12) - 1}`;
+const isBlack = (pitch) => [1, 3, 6, 8, 10].includes(pitch % 12);
+const STEP_W = 8, ROW_H = 10, HEAD = 26, KEYS_W = 48;
+let lastNotes = null;
+
+function sizeCanvas(canvas, width, height) {
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = Math.round(width * ratio);
+  canvas.height = Math.round(height * ratio);
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  return ctx;
+}
+
+function drawRoll(t) {
+  const css = getComputedStyle(document.documentElement);
+  const color = (name) => css.getPropertyValue(name).trim();
+  const pitches = t.notes.map((n) => n.pitch);
+  const hi = Math.max(...pitches) + 2, lo = Math.min(...pitches) - 2;
+  const lastBar = t.bar_steps.length ? t.bar_steps[t.bar_steps.length - 1] : 0;
+  const total = Math.max(lastBar + t.meter * t.steps_per_beat, ...t.notes.map((n) => n.step + n.steps));
+  const width = total * STEP_W, height = HEAD + (hi - lo + 1) * ROW_H;
+  const y = (pitch) => HEAD + (hi - pitch) * ROW_H;
+
+  const keys = sizeCanvas($("roll-keys"), KEYS_W, height);
+  keys.font = "11px system-ui, sans-serif";
+  keys.textBaseline = "middle";
+  for (let pitch = lo; pitch <= hi; pitch++) {
+    // A real keyboard's colours in both themes, with a line between white keys.
+    keys.fillStyle = isBlack(pitch) ? "#2a2a2c" : "#f4f3ef";
+    keys.fillRect(0, y(pitch), KEYS_W, ROW_H);
+    keys.fillStyle = "#c9c6bd";
+    if (!isBlack(pitch)) keys.fillRect(0, y(pitch) + ROW_H - 1, KEYS_W, 1);
+    if (pitch % 12 === 0) {
+      keys.fillStyle = "#5f5f64";
+      keys.fillText(noteName(pitch), 6, y(pitch) + ROW_H / 2);
+    }
+  }
+
+  const ctx = sizeCanvas($("roll-notes"), width, height);
+  ctx.fillStyle = color("--text");  // shade black-key rows lightly
+  ctx.globalAlpha = 0.05;
+  for (let pitch = lo; pitch <= hi; pitch++) if (isBlack(pitch)) ctx.fillRect(0, y(pitch), width, ROW_H);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = color("--line");
+  for (let s = 0; s <= total; s += t.steps_per_beat) ctx.fillRect(s * STEP_W, HEAD, 1, height);
+  ctx.fillStyle = color("--muted");
+  for (const s of t.bar_steps) ctx.fillRect(s * STEP_W, 0, 1, height);
+  ctx.font = "600 13px system-ui, sans-serif";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = color("--text");
+  for (const [s, symbol] of t.chords) ctx.fillText(symbol, s * STEP_W + 4, HEAD / 2);
+
+  ctx.fillStyle = color("--accent");
+  for (const n of t.notes) {
+    ctx.globalAlpha = 0.35 + 0.65 * (n.velocity / 127);  // louder notes are more solid
+    ctx.fillRect(n.step * STEP_W + 1, y(n.pitch) + 1, Math.max(n.steps * STEP_W - 2, 2), ROW_H - 2);
+  }
+  ctx.globalAlpha = 1;
+  roll.hidden = false;
+}
+
+// Hovering a note names it: "E4 · bar 3, beat 2".
+$("roll-notes").addEventListener("mousemove", (event) => {
+  if (!lastNotes || !lastNotes.notes.length) return;
+  const t = lastNotes, rect = event.target.getBoundingClientRect();
+  const step = Math.floor((event.clientX - rect.left) / STEP_W);
+  const hi = Math.max(...t.notes.map((n) => n.pitch)) + 2;
+  const pitch = hi - Math.floor((event.clientY - rect.top - HEAD) / ROW_H);
+  const note = t.notes.find((n) => n.pitch === pitch && n.step <= step && step < n.step + n.steps);
+  if (!note) { event.target.title = ""; return; }
+  const bar = t.bar_steps.filter((s) => s <= note.step).length;
+  const barStart = t.bar_steps[Math.max(bar - 1, 0)] || 0;
+  const beat = Math.floor((note.step - barStart) / t.steps_per_beat) + 1;
+  event.target.title = `${noteName(note.pitch)} · bar ${bar}, beat ${beat}`;
+});
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (lastNotes && !notesPanel.hidden) drawRoll(lastNotes);
+});
+
+function showNotes(t, jobId) {
+  lastNotes = t.notes.length ? t : null;
+  const levels = Object.entries(t.levels).map(([name, db]) => `${name} ${Math.round(db)} dB`).join(", ");
+  const how = t.automatic ? "loudest stem" : "chosen";
+  const warnings = t.warnings.length ? ` ${t.warnings.join(" ")}` : "";
+  notesInfo.textContent = `${t.instrument} (${how}) · ${t.notes.length} notes · levels: ${levels}.${warnings}`;
+  $("midi").href = `/api/notes/${jobId}.mid`;
+  $("musicxml").href = `/api/notes/${jobId}.musicxml`;
+  $("midi").hidden = $("musicxml").hidden = !t.notes.length;
+  notesFooter.hidden = false;
+  lastJobId = t.notes.length ? jobId : null;
+  showNotesView();
+}
+
+// Piano roll or Sheet: the same notes, drawn two ways.
+let notesView = "roll", lastJobId = null, sheetJob = null, sheetRenderer = null;
+
+function showNotesView() {
+  $("notes-views").hidden = !lastNotes;
+  $("show-roll").setAttribute("aria-pressed", notesView === "roll");
+  $("show-sheet").setAttribute("aria-pressed", notesView === "sheet");
+  roll.hidden = !(lastNotes && notesView === "roll");
+  $("sheet").hidden = !(lastNotes && notesView === "sheet");
+  if (!lastNotes || notesPanel.hidden) return;
+  if (notesView === "roll") drawRoll(lastNotes); else drawSheet();
+}
+$("show-roll").addEventListener("click", () => { notesView = "roll"; showNotesView(); });
+$("show-sheet").addEventListener("click", () => { notesView = "sheet"; showNotesView(); });
+
+// OpenSheetMusicDisplay, served by this app from web/vendor (no CDN, works offline).
+// Loaded the first time the Sheet view is opened.
+// Only when the server has notes: the lite app doesn't bundle the renderer, so it must
+// never be requested there (no 404, no console error).
+function loadSheetRenderer() {
+  sheetRenderer ??= appInfo.then((info) => {
+    if (!info.notes) throw new Error("notes are not included in this version of ChordChart");
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "/vendor/opensheetmusicdisplay.min.js";
+      script.onload = resolve;
+      script.onerror = () => reject(new Error("the sheet music renderer didn't load"));
+      document.head.append(script);
+    });
+  }).catch((err) => { sheetRenderer = null; throw err; });
+  return sheetRenderer;
+}
+
+async function drawSheet() {
+  const sheet = $("sheet"), jobId = lastJobId;
+  if (sheetJob === jobId) return;  // already drawn; OSMD re-lays it out on resize
+  sheet.textContent = "Drawing the sheet music…";
+  try {
+    await loadSheetRenderer();
+    const response = await fetch(`/api/notes/${jobId}.musicxml`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const xml = await response.text();
+    if (jobId !== lastJobId) return;  // a newer transcription arrived meanwhile
+    sheet.replaceChildren();
+    const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(sheet, {
+      autoResize: true, backend: "svg", drawTitle: true, drawPartNames: false,
+    });
+    await osmd.load(xml);
+    osmd.render();
+    sheetJob = jobId;
+  } catch (err) {
+    sheet.textContent = `Couldn't draw the sheet music (${err.message}). Download MusicXML opens it in any notation program.`;
+  }
+}
+
+// What this server offers. The lite desktop app has no notes: the Chords/Notes toggle
+// (and with it the instrument menu) stays hidden.
+const appInfo = fetch("/api/app").then((response) => response.json());
+appInfo.then((info) => {
+  $("views").hidden = !info.notes;
+  $("notes-credit").hidden = !info.notes;
+}).catch(() => {});
+
 // Desktop app: a Quit button, and a heartbeat so the app can close itself a few
 // minutes after the last ChordChart page is closed.
 (async () => {
   let info;
-  try { info = await (await fetch("/api/app")).json(); } catch { return; }
+  try { info = await appInfo; } catch { return; }
   if (!info.desktop) return;
   const version = $("version");
   version.append(` · ChordChart ${info.version} · `);
@@ -204,31 +505,19 @@ async function poll(jobId) {
   });
 })();
 
-form.addEventListener("submit", async (event) => {
+form.addEventListener("submit", (event) => {
   event.preventDefault();
-  go.disabled = true;
-  go.textContent = "Analyzing…";
-  errorBox.hidden = true;
   chartWrap.hidden = true;
-  showSteps([], false);
-  startTimer();
-  let finished = false;
-  try {
-    const response = await fetch("/api/analyze", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source: $("source").value, start: $("start").value, end: $("end").value }),
-    });
-    const body = await response.json();
-    if (!response.ok) { showError(body.error || `HTTP ${response.status}`); return; }
-    finished = await poll(body.job_id);
-  } catch (err) {
-    showError(`lost contact with the ChordChart server (${err.message}). Is it still running?`);
-  } finally {
-    stopTimer(finished);
-    go.disabled = false;
-    go.textContent = "Analyze";
-  }
+  runJob("/api/analyze", {}, go, "Analyzing…", (job) => {
+    chart.textContent = job.chart;
+    chartWrap.hidden = false;
+  });
+});
+
+transcribe.addEventListener("click", () => {
+  roll.hidden = notesFooter.hidden = $("sheet").hidden = $("notes-views").hidden = true;
+  runJob("/api/notes", { instrument: $("instrument").value }, transcribe, "Transcribing…",
+    (job, jobId) => showNotes(job.notes, jobId));
 });
 </script>
 </body>

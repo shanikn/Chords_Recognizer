@@ -2,15 +2,19 @@
 
     uv run python packaging/sandbox/run_sandbox_test.py zip        # the portable zip
     uv run python packaging/sandbox/run_sandbox_test.py installer  # the Setup .exe
+    ... --variant full    # "ChordChart Notes" instead of the lite "ChordChart"
 
 Starts a Sandbox with the build output mapped read-only, runs sandbox_test.ps1 in it
 (self-test, a real YouTube analysis, Quit, idle exit; for the installer also shortcuts,
 licenses and uninstall), waits for its results, closes the Sandbox and prints a summary.
+The variant's names (install folder, zip folder, log file) reach the script through
+variant.json; the summary also checks the app reports notes exactly when it should.
 Needs Windows 10/11 Pro with the "Windows Sandbox" feature enabled.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import shutil
 import subprocess
@@ -19,6 +23,9 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
+import variants  # noqa: E402
+
 OUT = HERE.parent / "out"
 RESULTS = HERE.parent / "build" / "sandbox-results"
 
@@ -44,8 +51,9 @@ WSB = r"""<Configuration>
 """
 
 
-def main(mode: str) -> int:
-    pattern = "ChordChart-Setup-*.exe" if mode == "installer" else "ChordChart-*-win64.zip"
+def main(mode: str, variant: variants.Variant) -> int:
+    stem = variant.file_stem
+    pattern = f"{stem}-Setup-*.exe" if mode == "installer" else f"{stem}-*-win64.zip"
     artifact = next(OUT.glob(pattern), None)
     if artifact is None:
         raise SystemExit(f"nothing to test: no {pattern} in {OUT}")
@@ -60,6 +68,8 @@ def main(mode: str) -> int:
     shutil.copy2(artifact, inbox / artifact.name)
     shutil.copy2(HERE / "sandbox_test.ps1", RESULTS / "sandbox_test.ps1")
     (RESULTS / "mode.txt").write_text(mode)
+    names = {"app_name": variant.app_name, "file_stem": stem, "log_file": variant.log_file}
+    (RESULTS / "variant.json").write_text(json.dumps(names))
     wsb = HERE.parent / "build" / "chordchart-test.wsb"
     config = WSB.format(inbox=inbox, results=RESULTS, command=COMMAND)
     wsb.write_text(config, encoding="utf-8")
@@ -73,7 +83,7 @@ def main(mode: str) -> int:
             break
         time.sleep(10)
     _close_sandbox()
-    return _summary()
+    return _summary(variant)
 
 
 def _close_sandbox() -> None:
@@ -86,7 +96,7 @@ def _close_sandbox() -> None:
         subprocess.run(["taskkill", "/F", "/IM", name], capture_output=True)
 
 
-def _summary() -> int:
+def _summary(variant: variants.Variant) -> int:
     def read(name):
         path = RESULTS / name
         return (
@@ -107,6 +117,9 @@ def _summary() -> int:
     if youtube.get("chart"):
         print(youtube["chart"])
     ok &= youtube.get("state") == "done"
+    app = json.loads(read("app.json") or "{}")
+    print(f"{variant.app_name}: /api/app notes = {app.get('notes')} (expected {variant.notes})")
+    ok &= app.get("notes") is variant.notes
     for name in ("processes.txt", "idle.txt", "install.txt", "licenses.txt", "uninstall.txt"):
         if (text := read(name)) is not None:
             print(f"{name}: {text}")
@@ -117,4 +130,8 @@ def _summary() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1] if len(sys.argv) > 1 else "zip"))
+    parser = argparse.ArgumentParser(description="Test the packaged app in Windows Sandbox.")
+    parser.add_argument("mode", nargs="?", choices=["zip", "installer"], default="zip")
+    parser.add_argument("--variant", choices=sorted(variants.VARIANTS), default=variants.DEFAULT)
+    args = parser.parse_args()
+    sys.exit(main(args.mode, variants.VARIANTS[args.variant]))

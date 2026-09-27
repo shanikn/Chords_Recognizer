@@ -10,6 +10,7 @@ developer command with its own "Update YouTube support" button.
 
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -24,8 +25,6 @@ def app_data_dir() -> Path:
     """Per-user app folder: %LOCALAPPDATA%\\ChordChart (logs, yt-dlp updates, caches).
     Windows paths are case-insensitive, so it's the same folder as download.py's
     `%LOCALAPPDATA%\\chordchart\\cache`."""
-    import os
-
     base = os.environ.get("LOCALAPPDATA")
     return Path(base) / "ChordChart" if base else Path.home() / ".chordchart"
 
@@ -33,6 +32,23 @@ def app_data_dir() -> Path:
 def bundle_dir() -> Path | None:
     """The unpacked app folder when frozen (PyInstaller's `_internal`), else None."""
     return Path(sys._MEIPASS) if FROZEN else None  # type: ignore[attr-defined]
+
+
+def register_dll_folder() -> None:
+    """Let native libraries find the Microsoft C/C++ runtime the app bundles.
+
+    PyInstaller puts vcruntime140.dll, msvcp140.dll & co. in the bundle folder and
+    registers it with SetDllDirectory. torch first loads its DLLs with
+    LoadLibraryExW(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS), which ignores that folder, and only
+    then retries with the plain search. os.add_dll_directory puts the folder in the first
+    search too, so the app's own runtime is found either way, never a different one from
+    the PC. (The Sandbox failure "WinError 126" on torch/lib/shm.dll was a runtime DLL
+    missing from the bundle altogether, vcruntime140_threads.dll; chordchart.spec adds it.)
+    Call it at startup, before anything imports torch.
+    """
+    folder = bundle_dir()
+    if folder is not None and hasattr(os, "add_dll_directory"):
+        os.add_dll_directory(str(folder))
 
 
 def bundled_exe(name: str) -> str | None:
