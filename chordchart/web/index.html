@@ -430,14 +430,19 @@ $("show-sheet").addEventListener("click", () => { notesView = "sheet"; showNotes
 
 // OpenSheetMusicDisplay, served by this app from web/vendor (no CDN, works offline).
 // Loaded the first time the Sheet view is opened.
+// Only when the server has notes: the lite app doesn't bundle the renderer, so it must
+// never be requested there (no 404, no console error).
 function loadSheetRenderer() {
-  sheetRenderer ??= new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "/vendor/opensheetmusicdisplay.min.js";
-    script.onload = resolve;
-    script.onerror = () => { sheetRenderer = null; reject(new Error("the sheet music renderer didn't load")); };
-    document.head.append(script);
-  });
+  sheetRenderer ??= appInfo.then((info) => {
+    if (!info.notes) throw new Error("notes are not included in this version of ChordChart");
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "/vendor/opensheetmusicdisplay.min.js";
+      script.onload = resolve;
+      script.onerror = () => reject(new Error("the sheet music renderer didn't load"));
+      document.head.append(script);
+    });
+  }).catch((err) => { sheetRenderer = null; throw err; });
   return sheetRenderer;
 }
 

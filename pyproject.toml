@@ -62,8 +62,9 @@ markers = [
     "slow: runs madmom models on generated audio (seconds per test)",
     "accuracy: needs locally stored annotated audio",
     "network: talks to YouTube; run explicitly with -m network",
+    "browser: drives the page in headless Chrome; uv run --with playwright pytest -m browser",
 ]
-addopts = "-rs -m 'not slow and not accuracy and not network'"
+addopts = "-rs -m 'not slow and not accuracy and not network and not browser'"
 # Any warning raised from madmom code fails the test run (spec §2.1), except the one
 # known deprecation below. Later entries take precedence over earlier ones.
 filterwarnings = [
