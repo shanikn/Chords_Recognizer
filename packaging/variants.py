@@ -33,11 +33,19 @@ class Variant:
     file_stem: str  # zip and installer names: <stem>-<version>-win64.zip
     app_id: str  # Inno Setup AppId: different, so both can be installed side by side
     notes: bool
+    # In %LOCALAPPDATA%\ChordChart\logs; must match chordchart.desktop.app.log_name, so
+    # the two apps running at once never rotate (rename) each other's open log.
+    log_file: str
 
 
 VARIANTS = {
     "lite": Variant(
-        "lite", "ChordChart", "ChordChart", "{{8E4B6C2A-6F2D-4C1E-9B7A-3C5D2E1F0A9B}", False
+        "lite",
+        "ChordChart",
+        "ChordChart",
+        "{{8E4B6C2A-6F2D-4C1E-9B7A-3C5D2E1F0A9B}",
+        False,
+        "chordchart.log",
     ),
     "full": Variant(
         "full",
@@ -45,6 +53,7 @@ VARIANTS = {
         "ChordChartNotes",
         "{{3F7D1B9E-2C4A-4E8B-A6D5-9B1E7C3F2A48}",
         True,
+        "chordchart-notes.log",
     ),
 }
 DEFAULT = "lite"
@@ -57,28 +66,34 @@ def current() -> Variant:
 
 def reachable(roots, excluded) -> dict[str, metadata.Distribution]:
     """Distributions reachable from `roots` through runtime requirements, by normalized
-    name, never entering an `excluded` one. The extras the app uses are followed."""
+    name, never entering an `excluded` one. The extras the app uses are followed.
+
+    A distribution is expanded once per set of extras it's asked for: `lib` and later
+    `lib[fast]` are two expansions, the second following what `fast` enables (a
+    requirement marked `extra == "fast"`). The (name, extras) pairs already expanded are
+    remembered, so cycles through extras end.
+    """
     seen: dict[str, metadata.Distribution] = {}
+    expanded: set[tuple[str, frozenset[str]]] = set()
     todo = [(name, frozenset()) for name in roots]
     while todo:
         name, extras = todo.pop()
         key = normal(name)
-        if key in excluded:
+        if key in excluded or (key, extras) in expanded:
             continue
+        expanded.add((key, extras))
         try:
             dist = metadata.distribution(name)
         except metadata.PackageNotFoundError:
             continue
-        first_visit = key not in seen
         seen[key] = dist
+        wanted = extras | ({"default", "deno"} if key == "yt-dlp" else frozenset())
+        envs = [{"extra": e} for e in wanted] or [{"extra": ""}]
         for raw in dist.requires or []:
             req = Requirement(raw)
-            wanted = extras | ({"default", "deno"} if key == "yt-dlp" else frozenset())
-            envs = [{"extra": e} for e in wanted] or [{"extra": ""}]
             if req.marker and not any(req.marker.evaluate(env) for env in envs):
                 continue
-            if first_visit or req.extras:
-                todo.append((req.name, frozenset(req.extras)))
+            todo.append((req.name, frozenset(req.extras)))
     return seen
 
 

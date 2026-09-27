@@ -97,12 +97,20 @@ def _run_app(log_file, open_browser: bool) -> int:
     os._exit(0)
 
 
+def log_name(notes: bool) -> str:
+    """The log file's name: one per variant (packaging/variants.py), because both apps
+    can run at once and share the logs folder. With one name, one would rename (rotate)
+    the log the other has open, which fails on Windows."""
+    return "chordchart-notes.log" if notes else "chordchart.log"
+
+
 def _setup_logging():
     from chordchart import bundled
+    from chordchart.notes.available import notes_available
 
     folder = bundled.app_data_dir() / "logs"
     folder.mkdir(parents=True, exist_ok=True)
-    log_file = folder / "chordchart.log"
+    log_file = folder / log_name(notes=notes_available())
     if log_file.exists() and log_file.stat().st_size > 2_000_000:
         log_file.replace(log_file.with_suffix(".old.log"))
     # A windowed app has no console: sys.stdout/stderr are None, and anything that

@@ -12,23 +12,27 @@ function Say($text) { "$(Get-Date -Format HH:mm:ss) $text" | Add-Content $log }
 
 try {
     $mode = (Get-Content (Join-Path $out "mode.txt")).Trim()   # "zip" or "installer"
-    Say "mode: $mode"
+    # The variant: lite "ChordChart" or full "ChordChart Notes" (packaging/variants.py).
+    $variant = Get-Content (Join-Path $out "variant.json") -Raw | ConvertFrom-Json
+    $app = $variant.app_name
+    $installDir = Join-Path $env:LOCALAPPDATA "Programs\$app"
+    Say "mode: $mode; app: $app"
     if ($mode -eq "installer") {
-        $setup = Get-ChildItem $in -Filter "ChordChart-Setup-*.exe" | Select-Object -First 1
+        $setup = Get-ChildItem $in -Filter "$($variant.file_stem)-Setup-*.exe" | Select-Object -First 1
         Say "installing $($setup.Name) silently"
         Start-Process $setup.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=$out\install-log.txt" -Wait
-        $exe = Join-Path $env:LOCALAPPDATA "Programs\ChordChart\ChordChart.exe"
-        $desktopLink = Test-Path (Join-Path ([Environment]::GetFolderPath("Desktop")) "ChordChart.lnk")
-        $startLink = Test-Path (Join-Path ([Environment]::GetFolderPath("Programs")) "ChordChart\ChordChart.lnk")
+        $exe = Join-Path $installDir "ChordChart.exe"
+        $desktopLink = Test-Path (Join-Path ([Environment]::GetFolderPath("Desktop")) "$app.lnk")
+        $startLink = Test-Path (Join-Path ([Environment]::GetFolderPath("Programs")) "$app\$app.lnk")
         Say "installed exe exists: $(Test-Path $exe); desktop shortcut: $desktopLink; start menu shortcut: $startLink"
         "exe=$(Test-Path $exe) desktop=$desktopLink startmenu=$startLink" | Set-Content (Join-Path $out "install.txt")
-        Get-ChildItem (Join-Path $env:LOCALAPPDATA "Programs\ChordChart\licenses") -ErrorAction SilentlyContinue |
+        Get-ChildItem (Join-Path $installDir "licenses") -ErrorAction SilentlyContinue |
             Select-Object -ExpandProperty Name | Set-Content (Join-Path $out "licenses.txt")
     } else {
-        $zip = Get-ChildItem $in -Filter "ChordChart-*-win64.zip" | Select-Object -First 1
+        $zip = Get-ChildItem $in -Filter "$($variant.file_stem)-*-win64.zip" | Select-Object -First 1
         Say "unzipping $($zip.Name)"
         Expand-Archive $zip.FullName -DestinationPath "C:\ChordChartTest" -Force
-        $exe = "C:\ChordChartTest\ChordChart\ChordChart.exe"
+        $exe = Join-Path "C:\ChordChartTest\$app" "ChordChart.exe"
     }
 
     Say "python on PATH: $([bool](Get-Command python -ErrorAction SilentlyContinue)); ffmpeg on PATH: $([bool](Get-Command ffmpeg -ErrorAction SilentlyContinue))"
@@ -39,7 +43,7 @@ try {
     Say "starting the app (no browser)"
     $env:CHORDCHART_IDLE_EXIT = "60"
     Start-Process $exe -ArgumentList "--no-browser"
-    $appLog = Join-Path $env:LOCALAPPDATA "ChordChart\logs\chordchart.log"
+    $appLog = Join-Path $env:LOCALAPPDATA "ChordChart\logs\$($variant.log_file)"
     $url = $null
     foreach ($i in 1..90) {
         Start-Sleep 1
@@ -81,12 +85,12 @@ try {
     Say "idle: running at 20 s: $running, after 90 s: $afterIdle"
 
     if ($mode -eq "installer") {
-        $uninstaller = Join-Path $env:LOCALAPPDATA "Programs\ChordChart\unins000.exe"
+        $uninstaller = Join-Path $installDir "unins000.exe"
         Say "uninstalling"
         Start-Process $uninstaller -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
         Start-Sleep 5
-        $gone = -not (Test-Path (Join-Path $env:LOCALAPPDATA "Programs\ChordChart\ChordChart.exe"))
-        $desktopLink = Test-Path (Join-Path ([Environment]::GetFolderPath("Desktop")) "ChordChart.lnk")
+        $gone = -not (Test-Path (Join-Path $installDir "ChordChart.exe"))
+        $desktopLink = Test-Path (Join-Path ([Environment]::GetFolderPath("Desktop")) "$app.lnk")
         "app_removed=$gone desktop_shortcut_left=$desktopLink" | Set-Content (Join-Path $out "uninstall.txt")
         Say "uninstalled: $gone; desktop shortcut left: $desktopLink"
     }
