@@ -36,7 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
         "-o",
         "--output",
         type=Path,
-        help="MIDI file to write, or a .json file for the notes as JSON "
+        help="MIDI file to write; or .musicxml for sheet music, .json for the notes as JSON "
         "(default: <song title>.mid in the current folder)",
     )
     parser.add_argument(
@@ -97,6 +97,10 @@ def main(argv: list[str]) -> int:
     output = args.output or Path(f"{_file_name(result.title)}.mid")
     if output.suffix.lower() == ".json":
         output.write_text(result.to_json() + "\n", encoding="utf-8")
+    elif output.suffix.lower() in (".musicxml", ".xml"):
+        from chordchart.notes.musicxml import to_musicxml
+
+        output.write_bytes(to_musicxml(result))
     else:
         output.write_bytes(to_midi(result))
     print(f"{len(result.notes)} notes written to {output}", file=sys.stderr)

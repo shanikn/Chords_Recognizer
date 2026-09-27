@@ -48,6 +48,9 @@ if VARIANT.notes:
     # Demucs's weights aren't bundled: they're downloaded on first use (notes/stems.py).
     models = os.path.join(os.path.dirname(basic_pitch.__file__), "saved_models", "icassp_2022")
     datas += [(os.path.join(models, "nmp.onnx"), "basic_pitch/saved_models/icassp_2022")]
+    # The Sheet view's renderer (OpenSheetMusicDisplay), served locally: works offline.
+    vendor = os.path.join(ROOT, "chordchart", "web", "vendor")
+    datas += [(os.path.join(vendor, "opensheetmusicdisplay.min.js"), "chordchart/web/vendor")]
     # Imported lazily. Demucs loads its model class by name from the weights' metadata.
     hiddenimports += ["chordchart.notes.pipeline", "chordchart.notes.midi"]
     hiddenimports += ["chordchart.notes.stems", "chordchart.notes.transcribe"]

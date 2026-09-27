@@ -71,6 +71,23 @@ def main() -> int:
     )
     if VARIANT.notes:
         _add_demucs_weights(rows)
+        vendor = HERE.parent / "chordchart" / "web" / "vendor"
+        _add_file(
+            rows,
+            "OpenSheetMusicDisplay (opensheetmusicdisplay.min.js, the Sheet view)",
+            "2.1.3",
+            "BSD-3-Clause",
+            "https://github.com/opensheetmusicdisplay/opensheetmusicdisplay",
+            vendor / "opensheetmusicdisplay-LICENSE.txt",
+        )
+        _add_file(
+            rows,
+            "VexFlow, JSZip, loglevel, typescript-collections (in opensheetmusicdisplay.min.js)",
+            "see notice",
+            "MIT (JSZip: MIT or GPL-3.0-or-later, used under MIT)",
+            "see the notice",
+            vendor / "opensheetmusicdisplay-NOTICE.txt",
+        )
     _add_file(
         rows,
         "Python",

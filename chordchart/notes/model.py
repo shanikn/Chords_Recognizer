@@ -39,6 +39,10 @@ class Transcription:
     # the piano roll can draw bar lines and chord names in step units.
     bar_steps: list[int] = field(default_factory=list)
     chords: list[tuple[int, str]] = field(default_factory=list)  # (step, symbol)
+    # The song's key from the chord analysis ("G#", "minor"), for the key signature.
+    key_tonic: str = ""
+    key_mode: str = ""
+    steps: int = 0  # length of the grid in steps: the chart's end
     warnings: list[str] = field(default_factory=list)
     timings: dict[str, float] = field(default_factory=dict)
     elapsed: float = 0.0

@@ -123,6 +123,14 @@
     background: var(--accent); color: var(--accent-text); text-decoration: none;
   }
   #notes-info { font-size: 15px; color: var(--muted); }
+  .views.small { margin-top: 16px; }
+  .views.small button { padding: 6px 14px; font-size: 15px; }
+  .downloads { display: flex; flex-wrap: wrap; gap: 10px; }
+  /* Sheet music is drawn black on white, so it sits on "paper" in both themes. */
+  .sheet {
+    margin-top: 16px; padding: 12px; border: 1px solid var(--line); border-radius: 8px;
+    background: #ffffff; color: #1d1d1f; overflow-x: auto; min-height: 60px;
+  }
 </style>
 </head>
 <body>
@@ -169,13 +177,21 @@
     <p class="hint">Uses the link, start and end above. Separating the instruments takes
       about twice the length of the audio; after that, switching instrument takes seconds.</p>
     <div id="notes-bar" class="bar" hidden><div></div></div>
+    <div id="notes-views" class="views small" role="group" aria-label="Show notes as" hidden>
+      <button type="button" id="show-roll" aria-pressed="true">Piano roll</button>
+      <button type="button" id="show-sheet" aria-pressed="false">Sheet</button>
+    </div>
     <div id="roll" class="roll" hidden>
       <canvas id="roll-keys" class="roll-keys"></canvas>
       <div class="roll-scroll"><canvas id="roll-notes"></canvas></div>
     </div>
+    <div id="sheet" class="sheet" hidden></div>
     <div id="notes-footer" class="notes-footer" hidden>
       <span id="notes-info"></span>
-      <a id="midi" class="button" href="#" download>Download MIDI</a>
+      <span class="downloads">
+        <a id="midi" class="button" href="#" download>Download MIDI</a>
+        <a id="musicxml" class="button" href="#" download>Download MusicXML</a>
+      </span>
     </div>
   </section>
 
@@ -294,7 +310,7 @@ function setView(view) {
   $("view-chords").setAttribute("aria-pressed", view === "chords");
   $("view-notes").setAttribute("aria-pressed", view === "notes");
   notesPanel.hidden = view !== "notes";
-  if (view === "notes" && lastNotes) drawRoll(lastNotes);  // sizes need a visible panel
+  if (view === "notes") showNotesView();  // drawing needs a visible panel
 }
 $("view-chords").addEventListener("click", () => setView("chords"));
 $("view-notes").addEventListener("click", () => setView("notes"));
@@ -390,9 +406,61 @@ function showNotes(t, jobId) {
   const warnings = t.warnings.length ? ` ${t.warnings.join(" ")}` : "";
   notesInfo.textContent = `${t.instrument} (${how}) · ${t.notes.length} notes · levels: ${levels}.${warnings}`;
   $("midi").href = `/api/notes/${jobId}.mid`;
-  $("midi").hidden = !t.notes.length;
+  $("musicxml").href = `/api/notes/${jobId}.musicxml`;
+  $("midi").hidden = $("musicxml").hidden = !t.notes.length;
   notesFooter.hidden = false;
-  if (lastNotes) drawRoll(t); else roll.hidden = true;
+  lastJobId = t.notes.length ? jobId : null;
+  showNotesView();
+}
+
+// Piano roll or Sheet: the same notes, drawn two ways.
+let notesView = "roll", lastJobId = null, sheetJob = null, sheetRenderer = null;
+
+function showNotesView() {
+  $("notes-views").hidden = !lastNotes;
+  $("show-roll").setAttribute("aria-pressed", notesView === "roll");
+  $("show-sheet").setAttribute("aria-pressed", notesView === "sheet");
+  roll.hidden = !(lastNotes && notesView === "roll");
+  $("sheet").hidden = !(lastNotes && notesView === "sheet");
+  if (!lastNotes || notesPanel.hidden) return;
+  if (notesView === "roll") drawRoll(lastNotes); else drawSheet();
+}
+$("show-roll").addEventListener("click", () => { notesView = "roll"; showNotesView(); });
+$("show-sheet").addEventListener("click", () => { notesView = "sheet"; showNotesView(); });
+
+// OpenSheetMusicDisplay, served by this app from web/vendor (no CDN, works offline).
+// Loaded the first time the Sheet view is opened.
+function loadSheetRenderer() {
+  sheetRenderer ??= new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "/vendor/opensheetmusicdisplay.min.js";
+    script.onload = resolve;
+    script.onerror = () => { sheetRenderer = null; reject(new Error("the sheet music renderer didn't load")); };
+    document.head.append(script);
+  });
+  return sheetRenderer;
+}
+
+async function drawSheet() {
+  const sheet = $("sheet"), jobId = lastJobId;
+  if (sheetJob === jobId) return;  // already drawn; OSMD re-lays it out on resize
+  sheet.textContent = "Drawing the sheet music…";
+  try {
+    await loadSheetRenderer();
+    const response = await fetch(`/api/notes/${jobId}.musicxml`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const xml = await response.text();
+    if (jobId !== lastJobId) return;  // a newer transcription arrived meanwhile
+    sheet.replaceChildren();
+    const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(sheet, {
+      autoResize: true, backend: "svg", drawTitle: true, drawPartNames: false,
+    });
+    await osmd.load(xml);
+    osmd.render();
+    sheetJob = jobId;
+  } catch (err) {
+    sheet.textContent = `Couldn't draw the sheet music (${err.message}). Download MusicXML opens it in any notation program.`;
+  }
 }
 
 // What this server offers. The lite desktop app has no notes: the Chords/Notes toggle
@@ -442,7 +510,7 @@ form.addEventListener("submit", (event) => {
 });
 
 transcribe.addEventListener("click", () => {
-  roll.hidden = notesFooter.hidden = true;
+  roll.hidden = notesFooter.hidden = $("sheet").hidden = $("notes-views").hidden = true;
   runJob("/api/notes", { instrument: $("instrument").value }, transcribe, "Transcribing…",
     (job, jobId) => showNotes(job.notes, jobId));
 });

@@ -91,3 +91,21 @@ onnxruntime), pretty_midi (comes with basic-pitch).
 - The self-test records the two notes checks as skipped in lite. Both builds pass.
 - Different installer AppIds, so both can be installed side by side; the executable is
   ChordChart.exe in both.
+
+## Follow-up: sheet music (2026-09-27)
+
+- `notes/musicxml.py`: MusicXML 4.0, one piano part on two staves (split at middle C),
+  1 division = one 16th of the chart's grid, the chart's bars as measures (pickup =
+  implicit measure 0, short last bar filled with rests), key signature from the chord
+  analysis's key (Transcription gains key_tonic, key_mode and the grid length `steps`).
+  Each staff is cut at every note start/end and barline; what sounds between two cuts
+  is a chord or a rest, and notes continuing past a cut are tied. Validated against the
+  official MusicXML 4.0 XSD on the Adele section (20 bars -> 20 measures, valid).
+- `GET /api/notes/{id}.musicxml`, a Download MusicXML button, `chordchart notes -o
+  x.musicxml`.
+- Sheet view (Piano roll | Sheet) drawn by OpenSheetMusicDisplay 2.1.3 (BSD-3-Clause),
+  vendored in chordchart/web/vendor and served at /vendor/; checked in headless Chrome
+  with zero requests leaving the app. Bundled in the full desktop build only.
+- Known limit: held notes under moving notes on the same staff are split and tied (one
+  voice per staff), which is exact but busy; a second voice for held notes would read
+  better.

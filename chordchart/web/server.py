@@ -6,6 +6,8 @@
     POST /api/notes        {"source", "start", "end", "instrument"} -> {"job_id"}; the job's
                            "notes" is the Transcription, "progress" the stem separation's
     GET  /api/notes/{id}.mid   that job's notes as a MIDI file
+    GET  /api/notes/{id}.musicxml   ... as sheet music (MusicXML, piano grand staff)
+    GET  /vendor/{file}    bundled JavaScript (the sheet music renderer)
     GET  /api/app          {"desktop", "version", "notes"}: "notes" false = not installed
 
 The page polls the job while it runs. Analyses run one at a time on a worker thread:
@@ -56,6 +58,9 @@ log = logging.getLogger(__name__)
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 PAGE = Path(__file__).with_name("index.html")
+VENDOR = Path(__file__).with_name("vendor")
+VENDOR_FILES = {"opensheetmusicdisplay.min.js": "text/javascript"}
+MUSICXML_TYPE = "application/vnd.recordare.musicxml+xml"
 QUEUED = "waiting for the previous analysis to finish"
 
 
@@ -240,20 +245,38 @@ def create_app(
 
         return submit(work)
 
-    @app.get("/api/notes/{job_id}.mid")
-    def notes_midi(job_id: str) -> Response:
-        from chordchart.notes.midi import to_midi
-
+    def notes_file(job_id: str, extension: str, media_type: str, render: Callable) -> Response:
         with lock:
             result = transcriptions.get(job_id)
         if result is None:
             return _error("no notes for this job", 404)
-        name = f"{result.title} ({result.instrument}).mid"
+        name = f"{result.title} ({result.instrument}).{extension}"
         return Response(
-            to_midi(result),
-            media_type="audio/midi",
+            render(result),
+            media_type=media_type,
             headers={"Content-Disposition": _attachment(name)},
         )
+
+    @app.get("/api/notes/{job_id}.mid")
+    def notes_midi(job_id: str) -> Response:
+        from chordchart.notes.midi import to_midi
+
+        return notes_file(job_id, "mid", "audio/midi", to_midi)
+
+    @app.get("/api/notes/{job_id}.musicxml")
+    def notes_musicxml(job_id: str) -> Response:
+        from chordchart.notes.musicxml import to_musicxml
+
+        return notes_file(job_id, "musicxml", MUSICXML_TYPE, to_musicxml)
+
+    @app.get("/vendor/{name}")
+    def vendor(name: str) -> Response:
+        """Bundled JavaScript (web/vendor), so the page never needs a CDN. Only listed
+        files are served; the lite desktop app doesn't bundle them (no notes there)."""
+        path = VENDOR / name
+        if name not in VENDOR_FILES or not path.is_file():
+            return _error("not found", 404)
+        return Response(path.read_bytes(), media_type=VENDOR_FILES[name])
 
     @app.get("/api/app")
     def app_info() -> JSONResponse:

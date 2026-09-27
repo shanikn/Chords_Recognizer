@@ -1,5 +1,6 @@
 """chordchart serve: the local web UI (analysis replaced by a fake)."""
 
+import re
 import threading
 import time
 
@@ -394,3 +395,27 @@ def test_notes_available_only_looks_packages_up(monkeypatch):
         assert available.notes_available() is False
     finally:
         available.notes_available.cache_clear()
+
+
+def test_notes_musicxml_download():
+    client = _notes_client(lambda s, **k: _transcription())
+    job_id = client.post("/api/notes", json={"source": LINK}, headers=JSON).json()["job_id"]
+    _wait(client, job_id)
+    response = client.get(f"/api/notes/{job_id}.musicxml")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/vnd.recordare.musicxml+xml"
+    assert response.content.startswith(b"<?xml") and b"<score-partwise" in response.content
+    assert "Caf%C3%A9%20song%20%28piano%29.musicxml" in response.headers["content-disposition"]
+    assert client.get("/api/notes/nope.musicxml").status_code == 404
+
+
+def test_sheet_music_renderer_is_served_locally():
+    client = _client(lambda *a, **k: None)
+    response = client.get("/vendor/opensheetmusicdisplay.min.js")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/javascript")
+    assert b"opensheetmusicdisplay" in response.content[:600]
+    assert client.get("/vendor/README.md").status_code == 404  # only listed files
+    page = client.get("/").text
+    assert "/vendor/opensheetmusicdisplay.min.js" in page
+    assert not re.search(r"""(src|href)\s*=\s*["'`]https?://""", page)  # nothing from the web
