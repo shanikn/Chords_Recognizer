@@ -38,11 +38,13 @@ def register_dll_folder() -> None:
     """Let native libraries find the Microsoft C/C++ runtime the app bundles.
 
     PyInstaller puts vcruntime140.dll, msvcp140.dll & co. in the bundle folder and
-    registers it with SetDllDirectory. torch loads its DLLs with
-    LoadLibraryExW(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS), which ignores that folder: on a PC
-    without the Visual C++ Redistributable, torch/lib/shm.dll then fails with
-    "WinError 126" (found by the Windows Sandbox test). os.add_dll_directory adds the
-    folder to that search. Call it at startup, before anything imports torch.
+    registers it with SetDllDirectory. torch first loads its DLLs with
+    LoadLibraryExW(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS), which ignores that folder, and only
+    then retries with the plain search. os.add_dll_directory puts the folder in the first
+    search too, so the app's own runtime is found either way, never a different one from
+    the PC. (The Sandbox failure "WinError 126" on torch/lib/shm.dll was a runtime DLL
+    missing from the bundle altogether, vcruntime140_threads.dll; chordchart.spec adds it.)
+    Call it at startup, before anything imports torch.
     """
     folder = bundle_dir()
     if folder is not None and hasattr(os, "add_dll_directory"):

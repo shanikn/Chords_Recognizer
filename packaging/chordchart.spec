@@ -72,6 +72,33 @@ a = Analysis(  # noqa: F821
     excludes=excludes,
     noarchive=False,
 )
+
+if VARIANT.notes:
+    # torch_cpu.dll needs vcruntime140_threads.dll, which PyInstaller doesn't collect, and
+    # a clean Windows doesn't have it: torch then fails to load ("WinError 126", found by
+    # the Windows Sandbox test). It imports vcruntime140.dll, and PyInstaller's copy of
+    # that comes from Python (older), so the whole Microsoft C++ runtime is taken from
+    # this PC's installed Visual C++ Redistributable, one consistent version.
+    vc_runtime = [
+        "vcruntime140.dll", "vcruntime140_1.dll", "vcruntime140_threads.dll",
+        "msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "msvcp140_atomic_wait.dll",
+        "msvcp140_codecvt_ids.dll", "vcomp140.dll", "concrt140.dll",
+    ]  # fmt: skip
+    system32 = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32")
+    required = os.path.join(system32, "vcruntime140_threads.dll")
+    if not os.path.isfile(required):
+        raise SystemExit(
+            "vcruntime140_threads.dll not found: install the current Visual C++ "
+            "Redistributable (winget install Microsoft.VCRedist.2015+.x64) and build again"
+        )
+    replace = {name.lower() for name in vc_runtime}
+    a.binaries = [b for b in a.binaries if os.path.basename(b[0]).lower() not in replace]
+    a.binaries += [
+        (name, os.path.join(system32, name), "BINARY")
+        for name in vc_runtime
+        if os.path.isfile(os.path.join(system32, name))
+    ]
+
 pyz = PYZ(a.pure)  # noqa: F821
 icon = os.path.join(SPECPATH, "chordchart.ico")  # noqa: F821
 exe = EXE(  # noqa: F821
