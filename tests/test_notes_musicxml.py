@@ -239,3 +239,91 @@ def test_flat_keys_spell_flats():
 def test_no_notes_is_still_a_score():
     root = _parse(_transcription([]))
     assert len(root.findall("part/measure")) == 3
+
+
+def _positions(measure):
+    """(position in 16ths, element) for every note and direction, following backup/forward."""
+    position, placed = 0, []
+    for child in measure:
+        if child.tag == "backup":
+            position -= int(child.findtext("duration"))
+        elif child.tag == "forward":
+            position += int(child.findtext("duration"))
+        elif child.tag == "direction":
+            placed.append((position, child))
+        elif child.tag == "note":
+            placed.append((position, child))
+            if child.find("chord") is None:
+                position += int(child.findtext("duration"))
+    return placed
+
+
+def _pedals(root):
+    """[(measure number, position, type)] of the sustain pedal marks."""
+    marks = []
+    for measure in root.findall("part/measure"):
+        for position, element in _positions(measure):
+            pedal = element.find("direction-type/pedal")
+            if element.tag == "direction" and pedal is not None:
+                assert element.findtext("staff") == "2" and element.get("placement") == "below"
+                marks.append((measure.get("number"), position, pedal.get("type")))
+    return marks
+
+
+# A sustained A-major arpeggio in eighths on the bass staff: every note rings to beat 3.
+ARPEGGIO = [_note(0, 8, 45), _note(2, 6, 49), _note(4, 4, 52), _note(6, 2, 57)]
+
+
+def test_held_notes_are_cut_where_the_next_one_in_their_voice_starts():
+    root = _parse(_transcription(ARPEGGIO))
+    measure = root.find("part/measure")
+    voices = _voices(measure, 2)
+    # A2, C#3 and E3 ring on while the next note starts: voice 6, each cut at the next.
+    assert _events(voices["6"]) == [("A2", 2, []), ("C#3", 2, []), ("E3", 4, []), ("rest", 8, [])]
+    # A3 is the moving line.
+    assert _events(voices["5"]) == [("rest", 6, []), ("A3", 2, []), ("rest", 8, [])]
+    assert not any(_ties(n) for n in _staff_notes(measure, 2))
+
+
+def test_second_voice_rests_are_hidden_and_first_voice_rests_shown():
+    root = _parse(_transcription(ARPEGGIO))
+    voices = _voices(root.find("part/measure"), 2)
+    assert [n.get("print-object") for n in voices["6"] if n.find("rest") is not None] == ["no"]
+    assert {n.get("print-object") for n in voices["5"] if n.find("rest") is not None} == {None}
+
+
+def test_the_sustain_pedal_covers_what_was_cut():
+    # A2 and C#3 were cut but rang to step 8: pedal down at 0, up at 8, under the bass staff.
+    assert _pedals(_parse(_transcription(ARPEGGIO))) == [("1", 0, "start"), ("1", 8, "stop")]
+
+
+def test_a_pedal_can_span_a_barline():
+    # A2 and C#3 ring from beat 4 into bar 2 while E3 moves: A2 is cut when C#3 starts,
+    # and the pedal holds it to bar 2 beat 3.
+    notes = [_note(12, 12, 45), _note(14, 10, 49), _note(16, 2, 52)]
+    root = _parse(_transcription(notes))
+    assert _pedals(root) == [("1", 12, "start"), ("2", 8, "stop")]
+    assert _staff_durations(root.findall("part/measure")[1], 2) == 16
+
+
+def test_treble_cuts_are_pedalled_under_the_bass_staff():
+    notes = [_note(0, 8, 64), _note(2, 6, 67), _note(4, 4, 71)]  # E4, G4, B4 arpeggio
+    assert _pedals(_parse(_transcription(notes))) == [("1", 0, "start"), ("1", 8, "stop")]
+
+
+def test_no_cuts_no_pedal():
+    notes = [_note(0, 16, 64), _note(4, 4, 67), _note(0, 4, 48)]  # one held note, never cut
+    assert _pedals(_parse(_transcription(notes))) == []
+
+
+def test_midi_keeps_the_full_lengths():
+    import io
+
+    import pretty_midi
+
+    from chordchart.notes.midi import to_midi
+
+    midi = pretty_midi.PrettyMIDI(io.BytesIO(to_midi(_transcription(ARPEGGIO))))
+    sixteenth = 60 / 96 / 4
+    lengths = sorted(round((n.end - n.start) / sixteenth) for n in midi.instruments[0].notes)
+    assert lengths == [2, 4, 6, 8]  # as played, not as notated

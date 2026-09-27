@@ -11,6 +11,11 @@ the rest to the first (stems up); a bar with no held notes has one voice and the
 renderer picks the stems. The first voice then never overlaps itself, so its notes
 are written as they are. Treble staff: voices 1 and 2; bass staff: voices 5 and 6.
 
+Pedal: a held note is written only up to the next note in its voice, the way a pianist
+reads a sustained arpeggio, and the sustain pedal (marked under the bass staff) keeps
+it ringing to its real end. Overlapping pedal spans are one pedal. The second voice's
+rests are hidden. The MIDI file keeps every note's full length (midi.py).
+
 Measures are the chart's bars. A pickup before the first downbeat is an implicit
 measure 0; a short last bar (the song stops mid-bar) is filled with rests.
 
@@ -90,10 +95,16 @@ def to_musicxml(transcription: Transcription) -> bytes:
     part = ET.SubElement(score, "part", id="P1")
 
     notes = [(n.step, n.step + n.steps, n.pitch, n.velocity) for n in t.notes if n.steps > 0]
-    staves = {
-        1: _split_voices([n for n in notes if n[2] >= MIDDLE_C]),
-        2: _split_voices([n for n in notes if n[2] < MIDDLE_C]),
-    }
+    staves, pedalled = {}, []
+    for staff, on_staff in (
+        (1, [n for n in notes if n[2] >= MIDDLE_C]),
+        (2, [n for n in notes if n[2] < MIDDLE_C]),
+    ):
+        moving, held = _split_voices(on_staff)
+        held, spans = _cut_held(held)
+        staves[staff] = (moving, held)
+        pedalled += spans
+    pedal = _pedal_marks(pedalled)
     measures = _measures(t)
     for index, (start, length, implicit) in enumerate(measures):
         number = index if measures[0][2] else index + 1
@@ -112,7 +123,14 @@ def to_musicxml(transcription: Transcription) -> bytes:
             for voice_notes, voice, stem in chunks:
                 if len(measure.findall("note")):  # every voice after the first starts over
                     ET.SubElement(ET.SubElement(measure, "backup"), "duration").text = str(length)
-                _write_voice(measure, voice_notes, start, end, staff, voice, stem, names)
+                hide_rests = voice == VOICES[staff][1]
+                _write_voice(
+                    measure, voice_notes, start, end, staff, voice, stem, names, hide_rests
+                )
+        last = index == len(measures) - 1
+        for position, kind in pedal:
+            if start <= position < end or (last and position == end):
+                _pedal(measure, position - start, length, kind)
         if index == len(measures) - 1:
             barline = ET.SubElement(measure, "barline", location="right")
             ET.SubElement(barline, "bar-style").text = "light-heavy"
@@ -174,11 +192,53 @@ def _split_voices(notes: list[tuple]) -> tuple[list[tuple], list[tuple]]:
     return moving, held
 
 
-def _write_voice(measure, notes, a, b, staff, voice, stem, names: list[str]) -> None:
+def _cut_held(held: list[tuple]) -> tuple[list[tuple], list[tuple[int, int]]]:
+    """Cut each held note where the next held note on its staff starts; return the cut
+    notes and the spans (start, real end) the pedal has to hold."""
+    starts = sorted({n[0] for n in held})
+    cut, spans = [], []
+    for start, end, pitch, velocity in held:
+        later = bisect.bisect_right(starts, start)
+        if later < len(starts) and starts[later] < end:
+            cut.append((start, starts[later], pitch, velocity))
+            spans.append((start, end))
+        else:
+            cut.append((start, end, pitch, velocity))
+    return cut, spans
+
+
+def _pedal_marks(spans: list[tuple[int, int]]) -> list[tuple[int, str]]:
+    """Pedal down/up steps for the spans, overlapping ones merged; sorted, an up before a
+    down at the same step (the pedal is lifted and pressed again)."""
+    merged: list[list[int]] = []
+    for start, end in sorted(spans):
+        if merged and start < merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    marks = [(s, "start") for s, _ in merged] + [(e, "stop") for _, e in merged]
+    return sorted(marks, key=lambda m: (m[0], m[1] != "stop"))
+
+
+def _pedal(measure, offset: int, length: int, kind: str) -> None:
+    """A pedal mark under the bass staff, `offset` 16ths into a measure that's been
+    written to its end: step back, place it, step forward again."""
+    back = length - offset
+    if back:
+        ET.SubElement(ET.SubElement(measure, "backup"), "duration").text = str(back)
+    direction = ET.SubElement(measure, "direction", placement="below")
+    ET.SubElement(ET.SubElement(direction, "direction-type"), "pedal", type=kind, line="yes")
+    ET.SubElement(direction, "staff").text = "2"
+    ET.SubElement(direction, "sound", {"damper-pedal": "yes" if kind == "start" else "no"})
+    if back:
+        ET.SubElement(ET.SubElement(measure, "forward"), "duration").text = str(back)
+
+
+def _write_voice(measure, notes, a, b, staff, voice, stem, names, hide_rests=False) -> None:
     """One voice of one measure [a, b): chords and rests between the cuts, tied across."""
     inside = [n for n in notes if n[0] < b and n[1] > a]
     if not inside:
-        _note(measure, None, b - a, staff, voice, whole_measure=True)
+        _note(measure, None, b - a, staff, voice, whole_measure=True, hidden=hide_rests)
         return
     cuts = sorted({a, b} | {max(a, min(b, x)) for s, e, *_ in inside for x in (s, e)})
     for x, y in pairwise(cuts):
@@ -186,7 +246,7 @@ def _write_voice(measure, notes, a, b, staff, voice, stem, names: list[str]) -> 
         pieces = _split(y - x)
         if not sounding:
             for piece in pieces:
-                _note(measure, None, piece, staff, voice)
+                _note(measure, None, piece, staff, voice, hidden=hide_rests)
             continue
         for i, piece in enumerate(pieces):
             for j, (start, end, pitch, velocity) in enumerate(sounding):
@@ -210,9 +270,20 @@ def _split(length: int) -> list[int]:
 
 
 def _note(
-    measure, spelled, length, staff, voice, stem=None, chord=False, ties=(), whole_measure=False
+    measure,
+    spelled,
+    length,
+    staff,
+    voice,
+    stem=None,
+    chord=False,
+    ties=(),
+    whole_measure=False,
+    hidden=False,
 ) -> None:
     note = ET.SubElement(measure, "note")
+    if hidden:
+        note.set("print-object", "no")
     if chord:
         ET.SubElement(note, "chord")
     if spelled is None:
