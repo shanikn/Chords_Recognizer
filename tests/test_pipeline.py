@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from chordchart.model import Segment
+from chordchart.model import Key, Segment, Song
 from chordchart.pipeline import analyze
 from chordchart.render.text import render_text
 
@@ -106,3 +106,37 @@ def test_whole_song_still_has_a_pickup_when_it_starts_mid_bar(click_track, tmp_p
 def test_early_strum_track_end_to_end(early_strum_track):
     song = analyze(early_strum_track)
     assert [bar.chords[0].symbol for bar in song.bars[:3]] == ["C", "G", "Am"]
+
+
+def test_a_custom_beat_tracker_replaces_madmom(monkeypatch):
+    from chordchart import pipeline
+    from chordchart.beats import Beats
+
+    monkeypatch.setattr(pipeline, "track_beats", lambda *a, **k: pytest.fail("madmom ran"))
+    monkeypatch.setattr(pipeline, "detect_key", lambda audio, processors: "key")
+    beats = Beats([0.5, 1.0], [1, 2], 120.0, 4)
+    seen = []
+
+    class Recognizer:
+        def recognize(self, _):
+            return ["segments"]
+
+    stage = pipeline._Stages(None, {})
+    result = pipeline._run_models(
+        stage, None, Recognizer(), "audio", "wav", (3, 4), False, lambda a: seen.append(a) or beats
+    )
+    assert result == (beats, ["segments"], "key") and seen == ["audio"]
+
+
+def test_a_custom_beat_tracker_bypasses_the_analysis_cache(monkeypatch):
+    from chordchart import pipeline
+
+    calls = []
+    monkeypatch.setattr(pipeline, "_run", lambda source, **kwargs: calls.append(kwargs) or Song(
+        title="t", source="s", duration=1.0, key=Key("C", "major", 1.0), bpm=1.0, meter=4, bars=[]
+    ))  # fmt: skip
+    tracker = object()
+    pipeline.analyze("song.wav", beats_fn=tracker)
+    pipeline.analyze("song.wav")
+    assert (calls[0]["cache"], calls[0]["beats_fn"]) == (False, tracker)
+    assert (calls[1]["cache"], calls[1]["beats_fn"]) == (True, None)
