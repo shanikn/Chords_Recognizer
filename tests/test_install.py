@@ -27,3 +27,18 @@ def test_madmom_models_load_without_warnings():
         RNNDownBeatProcessor()
         DBNDownBeatTrackingProcessor(beats_per_bar=[3, 4], fps=100)
         CNNKeyRecognitionProcessor()
+
+
+def test_frozen_app_adds_its_folder_to_the_dll_search(monkeypatch, tmp_path):
+    import os
+
+    from chordchart import bundled
+
+    added = []
+    monkeypatch.setattr(os, "add_dll_directory", added.append, raising=False)
+    monkeypatch.setattr(bundled, "bundle_dir", lambda: None)
+    bundled.register_dll_folder()  # not frozen: nothing to do
+    assert added == []
+    monkeypatch.setattr(bundled, "bundle_dir", lambda: tmp_path)
+    bundled.register_dll_folder()
+    assert added == [str(tmp_path)]

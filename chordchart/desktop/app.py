@@ -38,6 +38,10 @@ FRIENDLY_UPDATE_HINT = (
 def main() -> int:
     multiprocessing.freeze_support()  # must run before anything else in a worker
 
+    from chordchart import bundled
+
+    bundled.register_dll_folder()  # before anything can import torch (full app)
+
     from chordchart.desktop import ytdlp_update
 
     if len(sys.argv) >= 4 and sys.argv[1] == ytdlp_update.CHECK_FLAG:
