@@ -12,7 +12,8 @@ reproduces beat_this 1.1.0 exactly; experiments/beat_this/verify.py checks it.
 - the model sees 1500-frame (30 s) chunks overlapping by 6 frames at each side; each
   chunk's border frames are dropped and the first chunk wins where they overlap;
 - the logits become probabilities for madmom's DBNDownBeatTrackingProcessor (as Beat
-  This!'s "dbn" postprocessing), which picks steady beats and whole bars.
+  This!'s "dbn" postprocessing, with a stiffer tempo: see DBN_TRANSITION_LAMBDA), which
+  picks steady beats and whole bars.
 
 Evaluated against madmom's own tracker on 10 annotated Beatles songs (evaluate/,
 2026-09-27): beat F 0.822 vs 0.800, CMLt 0.895 vs 0.766, downbeat F 0.816 vs 0.800,
@@ -31,8 +32,13 @@ MODEL_SHA256 = "8388f6ec6b071fe40e5a901162066c7c97138214a0147ec2fa492c23a26be2d6
 SR, N_FFT, HOP, N_MELS, F_MIN, F_MAX = 22050, 1024, 441, 128, 30.0, 11000.0
 FPS = 50  # frames per second of the model's output
 CHUNK, BORDER = 1500, 6
-# The DBN postprocessing's settings, as beat_this.model.postprocessor.Postprocessor.
-DBN_MIN_BPM, DBN_MAX_BPM, DBN_TRANSITION_LAMBDA = 55.0, 215.0, 100
+# The DBN postprocessing's settings, as beat_this.model.postprocessor.Postprocessor,
+# except the tempo stiffness: Beat This! uses transition_lambda 100, which let it switch
+# metrical level mid-song on 3 of 11 real songs (bars doubling or halving for a
+# section). 300 removed that on two of them and matched madmom on others, with the
+# annotated Beatles scores unchanged; 1000 broke those (tempo drift). See
+# experiments/beat_this/dbn_lambda.py (2026-09-28).
+DBN_MIN_BPM, DBN_MAX_BPM, DBN_TRANSITION_LAMBDA = 55.0, 215.0, 300
 
 
 def _hz_to_mel(f):  # Slaney
