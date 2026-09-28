@@ -4,7 +4,14 @@ A chart is organised in bars, so before placing any chord we need the song's
 "skeleton": the time of every beat, and each beat's position in its bar (1 = the
 downbeat).
 
-madmom does this in two stages:
+The default tracker (track_beats) is Beat This! + DBN: a transformer (beat_this.py)
+says how likely a beat and a downbeat are in every frame, and madmom's DBN (step 2
+below) turns that into steady beats and whole bars. It replaced madmom's own RNN on
+2026-09-28 after the evaluation (evaluate/): better beats, downbeats and meter, and
+about 3x faster. madmom's tracker is still available as track_beats_madmom, e.g.
+analyze(beats_fn=partial(track_beats_madmom, processors=...)).
+
+madmom's own tracker works in two stages:
 
 1. **RNNDownBeatProcessor**, a recurrent neural network. It reads the audio as a
    spectrogram (100 frames per second) and outputs two numbers per frame: the
@@ -37,7 +44,7 @@ from chordchart.fetch import model_input
 if TYPE_CHECKING:
     from chordchart.processors import Processors
 
-FPS = 100  # frames per second of the RNN activations
+FPS = 100  # frames per second of madmom's RNN activations
 
 
 @dataclass(frozen=True)
@@ -49,12 +56,30 @@ class Beats:
 
 
 def track_beats(
-    wav_path: Path,
+    audio,
     beats_per_bar: Sequence[int] = (3, 4),
     processors: Processors | None = None,
 ) -> Beats:
-    """Beats and downbeats. Reuses `processors` if given (and built for the same
-    `beats_per_bar`); otherwise builds single-threaded processors for this call."""
+    """Beats and downbeats with Beat This! + DBN (the default). `audio` is the loaded
+    Signal (44.1 kHz mono int16) or a path to such a WAV. Reuses `processors` if given
+    (and built for the same `beats_per_bar`); otherwise loads the model for this call."""
+    from chordchart import beat_this
+
+    if processors is not None and processors.beats_per_bar == tuple(beats_per_bar):
+        model, dbn = processors.beat_this, processors.beat_this_dbn
+    else:
+        model, dbn = beat_this.BeatThisModel(), beat_this.make_dbn(beats_per_bar)
+    logits = model.logits(_samples(audio))
+    tracked = np.asarray(dbn(beat_this.dbn_activations(*logits))).reshape(-1, 2)
+    return _beats(tracked)
+
+
+def track_beats_madmom(
+    audio,
+    beats_per_bar: Sequence[int] = (3, 4),
+    processors: Processors | None = None,
+) -> Beats:
+    """Beats and downbeats with madmom's RNN + DBN (the default until 2026-09-28)."""
     if processors is not None and processors.beats_per_bar == tuple(beats_per_bar):
         rnn, tracker = processors.downbeat_rnn, processors.downbeat_dbn
     else:
@@ -62,8 +87,20 @@ def track_beats(
 
         rnn = RNNDownBeatProcessor()
         tracker = DBNDownBeatTrackingProcessor(beats_per_bar=list(beats_per_bar), fps=FPS)
-    activations = rnn(model_input(wav_path))
-    tracked = np.asarray(tracker(activations)).reshape(-1, 2)
+    activations = rnn(model_input(audio))
+    return _beats(np.asarray(tracker(activations)).reshape(-1, 2))
+
+
+def _samples(audio) -> np.ndarray:
+    """The audio as float32 in [-1, 1]: a loaded Signal (int16) or a WAV path."""
+    if isinstance(audio, str | Path):
+        from chordchart.fetch import read_wav
+
+        return read_wav(Path(audio))
+    return np.asarray(audio, dtype=np.float32) / 32768.0
+
+
+def _beats(tracked: np.ndarray) -> Beats:
     times = [float(t) for t in tracked[:, 0]]
     positions = [int(p) for p in tracked[:, 1]]
     return Beats(times, positions, bpm_from_times(times), meter_from_positions(positions))

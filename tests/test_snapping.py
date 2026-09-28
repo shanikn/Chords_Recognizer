@@ -34,7 +34,12 @@ def test_tracks_the_pulse(analysed):
     beats, _, bars = analysed
     assert beats.bpm == pytest.approx(100, abs=2)
     assert beats.meter == 4
-    assert len(bars) == 8
+    # 8 bars on the bar lines. Beat This! + DBN also keeps the pulse going through the
+    # second of silence after the music, so a 9th bar may start at the final bar line
+    # (19.2 s); madmom stops at the last click.
+    assert [round(bar.start / (4 * BEAT)) for bar in bars[:8]] == list(range(8))
+    assert all(abs(bar.start - i * 4 * BEAT) < 0.05 for i, bar in enumerate(bars[:8]))
+    assert len(bars) == 8 or (len(bars) == 9 and bars[8].start >= 32 * BEAT - 0.05)
 
 
 @pytest.mark.slow
