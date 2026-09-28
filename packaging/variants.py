@@ -22,7 +22,8 @@ from importlib import metadata
 
 from packaging.requirements import Requirement
 
-NOTES_ROOTS = ("demucs", "basic-pitch", "onnxruntime")
+# onnxruntime isn't one: the default beat tracker (Beat This!) runs on it in both builds.
+NOTES_ROOTS = ("demucs", "basic-pitch")
 ENV = "CHORDCHART_VARIANT"  # how build.py tells the spec which variant to build
 
 

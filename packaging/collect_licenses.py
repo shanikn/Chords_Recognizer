@@ -69,6 +69,16 @@ def main() -> int:
         "https://github.com/CPJKU/madmom_models",
         models_license,
     )
+    from chordchart import beat_this
+
+    _add_file(
+        rows,
+        "Beat This! small0 model (models/beat_this_small0.onnx, the beat tracker)",
+        beat_this.MODEL_SHA256[:12],
+        "MIT",
+        "https://github.com/CPJKU/beat_this",
+        beat_this.MODEL.with_name("beat_this-LICENSE.txt"),
+    )
     if VARIANT.notes:
         _add_demucs_weights(rows)
         vendor = HERE.parent / "chordchart" / "web" / "vendor"

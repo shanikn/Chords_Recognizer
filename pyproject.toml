@@ -24,7 +24,10 @@ dependencies = [
     # through onnxruntime; see [tool.uv] below for why tensorflow is left out.
     "demucs>=4.1.0",
     "basic-pitch>=0.4.0",
+    # The beat tracker (chordchart/beat_this.py): Beat This! on onnxruntime, with the
+    # audio resampled to 22.05 kHz by soxr. Both builds need them, not just notes.
     "onnxruntime>=1.20",
+    "soxr>=0.5",
 ]
 
 [project.scripts]
