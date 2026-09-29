@@ -60,6 +60,7 @@ def analyze(
     processors: Processors | None = None,
     parallel: bool = PARALLEL_STAGES,
     cache: bool = True,
+    beats_fn: Callable[[object], Beats] | None = None,
 ) -> Song:
     """Analyse `source` (a path or an http(s) link), or just its `start`-`end` section.
 
@@ -79,6 +80,10 @@ def analyze(
     `parallel` runs beats, chords and key at the same time. `cache` reuses (and
     stores) the models' outputs for identical audio (analysis_cache.py); `refresh`
     also bypasses it.
+
+    `beats_fn(audio) -> Beats` replaces madmom's beat tracking, for comparing trackers
+    (evaluate/). `audio` is the loaded 44.1 kHz mono Signal. The analysis cache is not
+    used then, so cached madmom beats never mix with another tracker's.
     """
     began = time.perf_counter()
     song = _run(
@@ -93,7 +98,8 @@ def analyze(
         status=status,
         processors=processors,
         parallel=parallel,
-        cache=cache,
+        cache=cache and beats_fn is None,
+        beats_fn=beats_fn,
     )
     song.elapsed = round(time.perf_counter() - began, 3)
     return song
@@ -113,6 +119,7 @@ def _run(
     processors,
     parallel,
     cache,
+    beats_fn=None,
 ) -> Song:
     timings: dict[str, float] = {}
     stage = _Stages(status, timings)
@@ -135,6 +142,7 @@ def _run(
         parallel=parallel,
         cache=cache,
         refresh=refresh,
+        beats_fn=beats_fn,
     )
     if processors is not None:
         return run(processors)
@@ -159,6 +167,7 @@ def _analyze(
     parallel: bool,
     cache: bool,
     refresh: bool,
+    beats_fn=None,
 ) -> Song:
     has_section = start > 0 or end is not None
     recognizer = recognizer or MadmomCRFRecognizer(processors)
@@ -184,7 +193,7 @@ def _analyze(
             beats, segments, key = cached.beats, cached.segments, cached.key
         else:
             beats, segments, key = _run_models(
-                stage, processors, recognizer, audio, wav, beats_per_bar, parallel
+                stage, processors, recognizer, audio, wav, beats_per_bar, parallel, beats_fn
             )
             if entry:
                 analysis_cache.store(
@@ -233,11 +242,13 @@ def _analyze(
     )
 
 
-def _run_models(stage, processors, recognizer, audio, wav, beats_per_bar, parallel):
+def _run_models(stage, processors, recognizer, audio, wav, beats_per_bar, parallel, beats_fn):
     """Beats, chord segments and key, from the models."""
     chord_input = audio if getattr(recognizer, "accepts_signal", False) else wav
+    if beats_fn is None:
+        beats_fn = partial(track_beats, beats_per_bar=beats_per_bar, processors=processors)
     model_stages = [
-        ("tracking beats", "beats", lambda: track_beats(audio, beats_per_bar, processors)),
+        ("tracking beats", "beats", lambda: beats_fn(audio)),
         ("recognizing chords", "chords", lambda: recognizer.recognize(chord_input)),
         ("detecting key", "key", lambda: detect_key(audio, processors)),
     ]

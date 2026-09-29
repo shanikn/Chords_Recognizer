@@ -36,8 +36,10 @@ def test_reuse_gives_identical_results_and_leaves_no_locked_files(click_track, m
 @pytest.mark.slow
 def test_close_shuts_the_worker_pools_down():
     procs = Processors(num_threads=2)
+    assert len(procs.pools()) == 1  # Beat This!'s DBN: 3/4 and 4/4 in parallel
+    assert procs.downbeat_rnn is not None  # madmom's own tracker, loaded when asked for
     pools = procs.pools()
-    assert len(pools) == 2  # downbeat RNN ensemble + 3/4-vs-4/4 DBN
+    assert len(pools) == 3  # + madmom's RNN ensemble and its DBN
     workers = [w for pool in pools for w in pool._pool]
     assert all(w.is_alive() for w in workers)
 

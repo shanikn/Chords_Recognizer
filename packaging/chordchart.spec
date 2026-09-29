@@ -21,6 +21,9 @@ datas = []
 datas += collect_data_files("madmom")  # the pickled models (and their LICENSE)
 datas += collect_data_files("yt_dlp_ejs")  # YouTube's JavaScript challenge solver
 datas += [(os.path.join(ROOT, "chordchart", "web", "index.html"), "chordchart/web")]
+# The default beat tracker's model (Beat This! small0, ONNX) and its license: both builds.
+for name in ("beat_this_small0.onnx", "beat_this-LICENSE.txt"):
+    datas += [(os.path.join(ROOT, "chordchart", "models", name), "chordchart/models")]
 licenses = os.path.join(SPECPATH, "build", VARIANT.key, "licenses")  # noqa: F821
 if os.path.isdir(licenses):  # from collect_licenses.py
     datas += [(licenses, "licenses")]

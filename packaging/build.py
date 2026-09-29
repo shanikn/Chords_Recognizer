@@ -120,6 +120,7 @@ def make_zip(folder: Path, zip_path: Path, top: str) -> None:
 
 
 def inno_setup(version: str, variant: variants.Variant) -> Path:
+    other = next(v for v in variants.VARIANTS.values() if v.key != variant.key)
     iscc = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Inno Setup 6" / "ISCC.exe"
     if not iscc.exists():
         iscc = Path(r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe")
@@ -131,6 +132,9 @@ def inno_setup(version: str, variant: variants.Variant) -> Path:
         "AppId": variant.app_id,
         "FileStem": variant.file_stem,
         "Variant": variant.key,
+        # The other variant shares the data folder: its uninstall key keeps it safe.
+        "OtherAppName": other.app_name,
+        "OtherAppKey": other.app_id.replace("{{", "{", 1) + "_is1",
     }
     args = [f"/D{name}={value}" for name, value in defines.items()]
     subprocess.run([str(iscc), "/Q", *args, str(HERE / "installer.iss")], check=True)

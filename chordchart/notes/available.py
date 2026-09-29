@@ -11,7 +11,7 @@ import importlib.util
 from functools import cache
 
 # What notes need at run time, by import name.
-PACKAGES = ("torch", "demucs", "basic_pitch", "onnxruntime")
+PACKAGES = ("torch", "demucs", "basic_pitch")  # onnxruntime is in both builds (beats)
 MISSING = "notes are not included in this version of ChordChart (install ChordChart Notes)"
 
 

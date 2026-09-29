@@ -237,6 +237,7 @@ dependencies = [
     { name = "numpy", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "onnxruntime", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "opencv-python-headless", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "soxr", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "uvicorn", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "yt-dlp", extra = ["default", "deno"], marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
@@ -262,6 +263,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.0,<2.6" },
     { name = "onnxruntime", specifier = ">=1.20" },
     { name = "opencv-python-headless", specifier = ">=4.12" },
+    { name = "soxr", specifier = ">=0.5" },
     { name = "uvicorn", specifier = ">=0.54" },
     { name = "yt-dlp", extras = ["default", "deno"], specifier = ">=2026.8.19" },
 ]

@@ -23,7 +23,8 @@ from pathlib import Path
 from chordchart.beats import Beats
 from chordchart.model import Key, Segment
 
-CACHE_VERSION = 1
+# 2: beats from Beat This! + DBN instead of madmom's RNN + DBN (2026-09-28).
+CACHE_VERSION = 2
 
 
 @dataclass(frozen=True)

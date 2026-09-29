@@ -3,8 +3,9 @@ ChordChart
 
 Detects the chords of a song and prints a bar-aligned chord chart with key, tempo and
 time signature. Works on local audio/video files and on video links (YouTube and other
-sites supported by yt-dlp). Local use only. The chord and beat models come from madmom
-(model files licensed CC BY-NC-SA 4.0, so non-commercial use only).
+sites supported by yt-dlp). Local use only. The chord and key models come from madmom
+(model files licensed CC BY-NC-SA 4.0, so non-commercial use only); beats and downbeats
+come from Beat This! (CPJKU, MIT) run on onnxruntime, with madmom's DBN.
 
 Status
 ------
@@ -95,7 +96,8 @@ Windows desktop app
 -------------------
 A self-contained app for people without Python: double-click the icon, the page opens
 in the default browser; "Quit ChordChart" (or ~5 minutes with no page open) exits.
-Everything is bundled: Python, madmom and its models, OpenCV, an LGPL ffmpeg, yt-dlp
+Everything is bundled: Python, madmom and its models, the Beat This! model and
+onnxruntime, OpenCV, an LGPL ffmpeg, yt-dlp
 and its JavaScript runtime (deno). Licenses: packaging/build/<variant>/licenses after a
 build, and the "Licenses" link in the app's footer.
 Two variants (packaging/variants.py); both can be installed side by side:

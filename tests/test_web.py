@@ -387,7 +387,7 @@ def test_notes_available_only_looks_packages_up(monkeypatch):
     from chordchart.notes import available
 
     available.notes_available.cache_clear()
-    found = {"torch", "demucs", "basic_pitch"}  # onnxruntime "missing"
+    found = {"torch", "demucs"}  # basic_pitch "missing"
     monkeypatch.setattr(
         importlib.util, "find_spec", lambda name: object() if name in found else None
     )

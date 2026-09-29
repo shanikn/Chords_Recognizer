@@ -39,3 +39,9 @@ packaging/build/
 packaging/dist/
 packaging/out/
 packaging/chordchart-256.png
+
+# Experiments: models, references and results are generated, never committed.
+experiments/out/
+
+# Evaluation: downloaded annotations (evaluate/data.py); results/ is committed.
+evaluate/data/

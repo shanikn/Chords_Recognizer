@@ -1,0 +1,71 @@
+# Evaluation songs: the Isophonics "Reference Annotations: The Beatles" (Centre for
+# Digital Music, Queen Mary University of London: chords by C. Harte, beats by
+# M. E. P. Davies; http://isophonics.net/content/reference-annotations-beatles).
+# The annotations are downloaded and checked by evaluate/data.py, never committed.
+#
+# `path`: the song inside the archive's chordlab/ and beat/ folders (The Beatles/...).
+# `link`: the official 2009 stereo remaster on The Beatles' YouTube channel. The
+#   annotations were made on the original CD masters; the 2009 remasters have the same
+#   edits and lengths, and evaluate/align.py finds the time offset. Later remixes
+#   (2019 Abbey Road, 2022 Revolver, 2015 "1") are different mixes, so songs only
+#   available that way officially aren't used.
+
+[[song]]
+slug = "let-it-be"
+title = "Let It Be"
+path = "12_-_Let_It_Be/06_-_Let_It_Be"
+link = "https://www.youtube.com/watch?v=QDYfEBY9NM4"
+
+[[song]]
+slug = "yesterday"
+title = "Yesterday"
+path = "05_-_Help!/13_-_Yesterday"
+link = "https://www.youtube.com/watch?v=NrgmdOz227I"
+
+[[song]]
+slug = "norwegian-wood"
+title = "Norwegian Wood (This Bird Has Flown)"
+path = "06_-_Rubber_Soul/02_-_Norwegian_Wood_(This_Bird_Has_Flown)"
+link = "https://www.youtube.com/watch?v=Y_V6y1ZCg_8"
+
+[[song]]
+slug = "michelle"
+title = "Michelle"
+path = "06_-_Rubber_Soul/07_-_Michelle"
+link = "https://www.youtube.com/watch?v=WoBLi5eE-wY"
+
+[[song]]
+slug = "in-my-life"
+title = "In My Life"
+path = "06_-_Rubber_Soul/11_-_In_My_Life"
+link = "https://www.youtube.com/watch?v=YBcdt6DsLQA"
+
+[[song]]
+slug = "a-hard-days-night"
+title = "A Hard Day's Night"
+path = "03_-_A_Hard_Day's_Night/01_-_A_Hard_Day's_Night"
+link = "https://www.youtube.com/watch?v=zx2TFk0vh1I"
+
+[[song]]
+slug = "drive-my-car"
+title = "Drive My Car"
+path = "06_-_Rubber_Soul/01_-_Drive_My_Car"
+link = "https://www.youtube.com/watch?v=kfSQkZuIx84"
+
+[[song]]
+slug = "cant-buy-me-love"
+title = "Can't Buy Me Love"
+path = "03_-_A_Hard_Day's_Night/07_-_Can't_Buy_Me_Love"
+link = "https://www.youtube.com/watch?v=TBSpmoA8V78"
+
+[[song]]
+slug = "babys-in-black"
+title = "Baby's In Black"
+path = "04_-_Beatles_for_Sale/03_-_Baby's_In_Black"
+link = "https://www.youtube.com/watch?v=TJFpUb7JGYo"
+
+[[song]]
+slug = "nowhere-man"
+title = "Nowhere Man"
+path = "06_-_Rubber_Soul/04_-_Nowhere_Man"
+link = "https://www.youtube.com/watch?v=8scSwaKbE64"
