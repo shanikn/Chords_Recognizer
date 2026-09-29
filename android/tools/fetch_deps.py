@@ -18,7 +18,6 @@ a version).
 from __future__ import annotations
 
 import hashlib
-import io
 import os
 import shutil
 import sys

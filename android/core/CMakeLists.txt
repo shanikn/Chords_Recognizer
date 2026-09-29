@@ -47,6 +47,7 @@ add_library(chordchart_core STATIC
   src/crf.cpp
   src/chart.cpp
   src/analyzer.cpp
+  src/audio.cpp
 )
 target_include_directories(chordchart_core
   PUBLIC include

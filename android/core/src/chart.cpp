@@ -151,6 +151,8 @@ Song build_chart(const Tracked& tracked, const std::vector<Segment>& segments, c
     const auto labels = beat_sync(clipped, times, hi);
 
     Song song;
+    song.beat_times = tracked.times;
+    song.beat_positions = tracked.positions;
     song.duration = hi - lo;
     song.key = key;
     song.bpm = bpm;
@@ -220,6 +222,8 @@ std::string Song::to_json() const {
         {"requested_end", nullptr},
         {"timings", timing_obj},
         {"elapsed", elapsed},
+        {"beats", json::Object{{"times", json::List(beat_times.begin(), beat_times.end())},
+                               {"positions", json::List(beat_positions.begin(), beat_positions.end())}}},
     };
     return json::dump(song);
 }

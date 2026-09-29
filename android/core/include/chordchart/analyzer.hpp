@@ -54,9 +54,13 @@ struct Song {
     std::vector<std::string> warnings;
     std::map<std::string, double> timings;  // seconds per stage
     double elapsed = 0;
+    // Every tracked beat (seconds) and its position in the bar (1 = downbeat), before the
+    // chart is trimmed to the song: for scoring the beat tracking, and for playback later.
+    std::vector<double> beat_times;
+    std::vector<int> beat_positions;
 
     // The same fields and names as the desktop app's Song.to_json(), minus title/source
-    // (the platform layer knows those).
+    // (the platform layer knows those), plus "beats": {"times", "positions"}.
     std::string to_json() const;
 };
 
