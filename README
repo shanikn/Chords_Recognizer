@@ -137,6 +137,8 @@ the full one.
     uv run python packaging/build.py                    # lite -> packaging/out/ChordChart-*.zip
     uv run python packaging/build.py --variant full     # -> ChordChartNotes-*.zip
     uv run python packaging/build.py --installer        # also the *-Setup-*.exe (either variant)
+    uv run python packaging/build.py --installer --release   # the installer to hand out
+Test builds compress the installer with lzma2/fast; --release uses lzma2/max.
     uv run python packaging/sandbox/run_sandbox_test.py zip        # test lite on a clean
     uv run python packaging/sandbox/run_sandbox_test.py installer  # Windows (Sandbox)
 The full build needs several GB of free memory (PyInstaller analyses torch).

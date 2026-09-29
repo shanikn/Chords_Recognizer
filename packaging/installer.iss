@@ -29,6 +29,10 @@
   #define OtherAppKey "{3F7D1B9E-2C4A-4E8B-A6D5-9B1E7C3F2A48}_is1"
 #endif
 
+; lzma2/max for releases; build.py passes lzma2/fast for test builds (much quicker).
+#ifndef Compression
+  #define Compression "lzma2/max"
+#endif
 #ifndef AppMutex
   #define AppMutex "Local\ChordChart-single-instance"
 #endif
@@ -53,7 +57,7 @@ UninstallDisplayIcon={app}\ChordChart.exe
 UninstallDisplayName={#AppName}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-Compression=lzma2/max
+Compression={#Compression}
 SolidCompression=yes
 WizardStyle=modern
 CloseApplications=force

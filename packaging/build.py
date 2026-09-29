@@ -3,6 +3,7 @@
     uv run python packaging/build.py                  # lite: "ChordChart", chords only
     uv run python packaging/build.py --variant full   # "ChordChart Notes": chords + notes
     uv run python packaging/build.py --installer      # also the Inno Setup installer
+    uv run python packaging/build.py --installer --release   # the one to hand out
 
 Steps:
 1. ffmpeg: a pinned LGPL build (BtbN), downloaded once into packaging/vendor/ and
@@ -13,7 +14,8 @@ Steps:
    (settings.json, caches). Then zip it ->
    packaging/out/<ChordChart|ChordChartNotes>-<version>-win64.zip.
 4. With --installer: Inno Setup (packaging/installer.iss) ->
-   packaging/out/<ChordChart|ChordChartNotes>-Setup-<version>.exe.
+   packaging/out/<ChordChart|ChordChartNotes>-Setup-<version>.exe. Test builds compress
+   it with lzma2/fast; --release uses lzma2/max (smaller download, slower to build).
 Each variant has its own work folder, packaging/build/<variant>/.
 """
 
@@ -24,6 +26,7 @@ import hashlib
 import os
 import subprocess
 import sys
+import time
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -35,6 +38,8 @@ import secrets_check  # noqa: E402
 import variants  # noqa: E402
 
 VENDOR, OUT = HERE / "vendor", HERE / "out"
+TEST_COMPRESSION = "lzma2/fast"  # installer compression for test builds
+RELEASE_COMPRESSION = "lzma2/max"  # --release: the installer people download
 
 FFMPEG_URL = (
     "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-26-13-03/"
@@ -48,6 +53,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Build the ChordChart Windows app.")
     parser.add_argument("--variant", choices=sorted(variants.VARIANTS), default=variants.DEFAULT)
     parser.add_argument("--installer", action="store_true", help="also build the installer")
+    parser.add_argument(
+        "--release",
+        action="store_true",
+        help="installer compressed with lzma2/max (default: lzma2/fast, for test builds)",
+    )
     args = parser.parse_args()
     variant = variants.VARIANTS[args.variant]
     os.environ[variants.ENV] = variant.key  # read by the spec and collect_licenses.py
@@ -65,8 +75,11 @@ def main() -> int:
     print(f"{variant.app_name} ({variant.key})")
     print(f"app folder: {folder}\nzip:        {zip_path}")
     if args.installer:
-        setup = inno_setup(__version__, variant)
-        print(f"installer:  {setup}")
+        compression = RELEASE_COMPRESSION if args.release else TEST_COMPRESSION
+        began = time.perf_counter()
+        setup = inno_setup(__version__, variant, compression)
+        took = time.perf_counter() - began
+        print(f"installer:  {setup} ({compression}, {took:.0f} s)")
     return 0
 
 
@@ -123,7 +136,9 @@ def make_zip(folder: Path, zip_path: Path, top: str) -> None:
                 archive.write(path, Path(top) / path.relative_to(folder))
 
 
-def inno_setup(version: str, variant: variants.Variant) -> Path:
+def inno_setup(
+    version: str, variant: variants.Variant, compression: str = TEST_COMPRESSION
+) -> Path:
     from chordchart.desktop.app import instance_name
     from chordchart.desktop.instance import mutex_name
 
@@ -145,6 +160,7 @@ def inno_setup(version: str, variant: variants.Variant) -> Path:
         # Held while the app runs (desktop/instance.py): Setup and the uninstaller ask
         # to close it first instead of failing on files in use.
         "AppMutex": mutex_name(instance_name(variant.notes)),
+        "Compression": compression,
     }
     args = [f"/D{name}={value}" for name, value in defines.items()]
     subprocess.run([str(iscc), "/Q", *args, str(HERE / "installer.iss")], check=True)
