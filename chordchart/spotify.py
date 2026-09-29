@@ -29,6 +29,7 @@ from __future__ import annotations
 import base64
 import html
 import json
+import logging
 import os
 import re
 import time
@@ -39,7 +40,10 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from chordchart import bundled
 from chordchart.errors import InvalidLinkError, NetworkError, SpotifyMatchError
+
+log = logging.getLogger(__name__)
 
 TOLERANCE = 3.0  # seconds between Spotify's and the video's duration
 SEARCH_RESULTS = 5
@@ -146,11 +150,13 @@ def track_id(arg: str) -> str:
 
 def _http(request: urllib.request.Request | str, timeout: float = 15) -> bytes:
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+        context = bundled.https_context()  # a fresh Windows lacks some root certificates
+        with urllib.request.urlopen(request, timeout=timeout, context=context) as response:  # noqa: S310
             return response.read()
     except urllib.error.HTTPError:
         raise  # the server answered: callers decide what a 404 or 401 means
     except (urllib.error.URLError, TimeoutError, OSError) as err:
+        log.warning("Spotify request failed: %r", err)  # the reason, in the app's log
         raise NetworkError(
             "network error: could not reach Spotify; check your internet connection"
         ) from err
@@ -177,7 +183,10 @@ def track_from_api(ident: str, creds: tuple[str, str], http: Callable = _http) -
     token_request = urllib.request.Request(
         "https://accounts.spotify.com/api/token",
         data=b"grant_type=client_credentials",
-        headers={"Authorization": f"Basic {basic}", "Content-Type": "application/x-www-form-urlencoded"},
+        headers={
+            "Authorization": f"Basic {basic}",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
     )
     token = json.loads(http(token_request))["access_token"]
     track_request = urllib.request.Request(
@@ -214,7 +223,9 @@ def track_from_page(ident: str, http: Callable = _http) -> Track:
             "couldn't read this track's details from Spotify's page; paste a YouTube link of "
             "the song instead"
         )
-    return Track(id=ident, title=title, artists=artists, duration=float(duration) if duration else None)
+    return Track(
+        id=ident, title=title, artists=artists, duration=float(duration) if duration else None
+    )
 
 
 def fetch_track(ident: str, data_dir: Path | None = None, http: Callable = _http) -> Track:
@@ -315,7 +326,9 @@ def _from_entry(entry: dict) -> Match:
     return Match(Track(**entry["track"]), Video(**entry["video"]), entry["chosen_by"])
 
 
-def cached_match(ident: str, folder: Path, now: float | None = None, *, stale: bool = False) -> Match | None:
+def cached_match(
+    ident: str, folder: Path, now: float | None = None, *, stale: bool = False
+) -> Match | None:
     """The saved match for track `ident`; None if there is none, or if it is older than
     MATCH_MAX_AGE (unless `stale`: then its age doesn't matter)."""
     entry = _read(folder / MATCHES).get(ident)
@@ -367,7 +380,10 @@ def match_track(
     saved = None if video_link is not None else cached_match(ident, folder, stale=True)
     # `refresh` redoes the search, but never throws away the user's own choice.
     if saved and (not refresh or saved.chosen_by == "user") and cached_match(ident, folder):
-        say(f"Spotify: {saved.track.artist} - {saved.track.title} → YouTube: {saved.video.title} (saved match)")
+        say(
+            f"Spotify: {saved.track.artist} - {saved.track.title} → YouTube: "
+            f"{saved.video.title} (saved match)"
+        )
         return saved
     # settings.json sits in the app's data folder, above cache/downloads
     track = fetch_track(ident, data_dir=folder.parent.parent, http=http)

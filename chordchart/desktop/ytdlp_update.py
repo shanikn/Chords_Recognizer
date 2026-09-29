@@ -164,7 +164,7 @@ def _get_json(url: str) -> dict:
 
 def _get_bytes(url: str) -> bytes:
     request = urllib.request.Request(url, headers={"User-Agent": "ChordChart-updater"})
-    with urllib.request.urlopen(request, timeout=30) as response:
+    with urllib.request.urlopen(request, timeout=30, context=bundled.https_context()) as response:
         return response.read()
 
 
