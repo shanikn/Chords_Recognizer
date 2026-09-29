@@ -86,6 +86,7 @@ def transcribe_notes(
     return Transcription(
         title=song.title,
         source=song.source,
+        match=song.match,
         instrument=chosen,
         automatic=automatic,
         levels=found.levels,

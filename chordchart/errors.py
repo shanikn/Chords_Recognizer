@@ -56,3 +56,9 @@ class DownloadFailedError(ChordChartError):
     """Anything else yt-dlp reports, usually fixed by upgrading yt-dlp."""
 
     exit_code = 2
+
+
+class SpotifyMatchError(ChordChartError):
+    """A Spotify track we couldn't read, or couldn't find on YouTube with confidence."""
+
+    exit_code = 2

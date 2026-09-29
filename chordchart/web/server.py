@@ -1,7 +1,9 @@
 """`chordchart serve`: a small local web UI over the same pipeline as the CLI.
 
     GET  /                 the page (index.html next to this file)
-    POST /api/analyze      {"source", "start", "end"} -> {"job_id"}
+    POST /api/analyze      {"source", "start", "end", "video"} -> {"job_id"}; "video" (optional,
+                           Spotify sources only) is a YouTube link to use instead of the
+                           automatic match, remembered for next time
     GET  /api/jobs/{id}    {"state": running|done|error, "messages", "chart", "song", "error"}
     POST /api/notes        {"source", "start", "end", "instrument"} -> {"job_id"}; the job's
                            "notes" is the Transcription, "progress" the stem separation's
@@ -45,6 +47,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from chordchart import spotify
+from chordchart.download import default_cache_dir
 from chordchart.errors import ChordChartError
 from chordchart.interactive import unquote
 from chordchart.notes.available import MISSING as NOTES_MISSING
@@ -203,9 +207,10 @@ def create_app(
         parsed = await _read_request(request)
         if isinstance(parsed, JSONResponse):
             return parsed
-        source, start, end, _ = parsed
+        source, start, end, body = parsed
 
         def work(job_id: str, job: Job, status: Callable) -> None:
+            _use_video(source, body, status)
             song = analyze_fn(source, start=start, end=end, status=status)
             chart, data = render_text(song), json.loads(song.to_json())
             with lock:
@@ -226,6 +231,8 @@ def create_app(
             return _error(f"instrument must be auto or one of {', '.join(INSTRUMENTS)}", 400)
 
         def work(job_id: str, job: Job, status: Callable) -> None:
+            _use_video(source, body, status)
+
             def progress(fraction: float) -> None:
                 with lock:
                     job.progress = round(fraction, 3)
@@ -365,7 +372,15 @@ async def _read_request(request: Request):
         return _error(str(exc), 400)
     if end is not None and end <= start:
         return _error("the end must be after the start", 400)
+    if body.get("video") and not spotify.is_spotify(source):
+        return _error("a replacement video can only be given for a Spotify link", 400)
     return source, start, end, body
+
+
+def _use_video(source: str, body: dict, status: Callable) -> None:
+    """Record the user's own YouTube video for a Spotify track (the analysis then uses it)."""
+    if video := str(body.get("video") or "").strip():
+        spotify.match_track(source, default_cache_dir() / "downloads", video_link=video, status=status)
 
 
 def _attachment(name: str) -> str:

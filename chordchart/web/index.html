@@ -126,6 +126,14 @@
   .views.small { margin-top: 16px; }
   .views.small button { padding: 6px 14px; font-size: 15px; }
   .downloads { display: flex; flex-wrap: wrap; gap: 10px; }
+  .match {
+    margin-top: 16px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px;
+    font-size: 15px;
+  }
+  .match p { margin: 0 0 6px; }
+  .match a { color: inherit; }
+  .override { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+  .override input { flex: 1 1 260px; min-width: 0; }
   /* Sheet music is drawn black on white, so it sits on "paper" in both themes. */
   .sheet {
     margin-top: 16px; padding: 12px; border: 1px solid var(--line); border-radius: 8px;
@@ -138,14 +146,15 @@
   <header>
     <div>
       <h1>ChordChart</h1>
-      <p class="sub">Paste a song link or a file path and get a bar-by-bar chord chart.</p>
+      <p class="sub">Paste a song link or a file path and get a bar-by-bar chord chart.
+        Links: YouTube videos, or Spotify <em>tracks</em> (albums and playlists aren't supported).</p>
     </div>
     <button id="quit" class="quit" type="button" hidden>Quit ChordChart</button>
   </header>
 
   <form id="form" autocomplete="off">
     <label class="source">Link or file
-      <input id="source" placeholder="https://www.youtube.com/watch?v=..." required>
+      <input id="source" placeholder="YouTube or Spotify track link, or a file path" required>
     </label>
     <label>Start <input id="start" placeholder="0:00" inputmode="decimal"></label>
     <label>End <input id="end" placeholder="end" inputmode="decimal"></label>
@@ -158,6 +167,16 @@
   </div>
 
   <ol id="steps" hidden></ol>
+  <!-- Spotify links: which YouTube video was analysed, and a way to pick another. -->
+  <section id="match" class="match" hidden>
+    <p id="match-text"></p>
+    <p class="hint">Spotify's own audio can't be used, so ChordChart analyses the same recording
+      from YouTube, matched by artist, title and length.</p>
+    <div class="override">
+      <input id="video" placeholder="Wrong recording? Paste a YouTube link of the song">
+      <button id="use-video" type="button">Use this video</button>
+    </div>
+  </section>
   <div id="error" class="error" role="alert" hidden></div>
   <div id="chart-wrap" class="chart-wrap" hidden><pre id="chart"></pre></div>
 
@@ -207,6 +226,23 @@ const form = $("form"), go = $("go"), steps = $("steps"), errorBox = $("error");
 const chartWrap = $("chart-wrap"), chart = $("chart"), timer = $("timer");
 const notesPanel = $("notes"), transcribe = $("transcribe"), notesBar = $("notes-bar");
 const roll = $("roll"), notesFooter = $("notes-footer"), notesInfo = $("notes-info");
+const matchBox = $("match");
+const isSpotify = (text) => /^(spotify:|https?:\/\/([a-z]+\.)?spotify\.(com|link|app\.link)\/)/i.test(text.trim());
+const isSpotifyTrack = (text) => isSpotify(text) && /(\/|:)track(\/|:)/.test(text);
+const mmss = (s) => s == null ? "?:??" : `${Math.floor(Math.round(s) / 60)}:${String(Math.round(s) % 60).padStart(2, "0")}`;
+
+// The Spotify track and the YouTube video analysed for it (song.match / notes.match).
+function showMatch(match) {
+  if (!match) { matchBox.hidden = true; return; }
+  const text = $("match-text"), t = match.track, v = match.video;
+  const link = document.createElement("a");
+  link.href = v.url; link.target = "_blank"; link.rel = "noopener"; link.textContent = v.title;
+  const how = match.chosen_by === "user" ? "your choice" : "matched automatically";
+  text.replaceChildren(
+    `Spotify: ${t.artists.join(", ")} – ${t.title} (${mmss(t.duration)}) → YouTube: `, link,
+    ` · ${v.channel} · ${mmss(v.duration)} (${how})`);
+  matchBox.hidden = false;
+}
 
 function showError(message) {
   errorBox.textContent = message;
@@ -272,7 +308,16 @@ async function poll(jobId, onDone) {
       notesBar.firstElementChild.style.width = `${job.progress * 100}%`;
     }
     if (job.state === "done") { onDone(job); return true; }
-    if (job.state === "error") { showError(job.error); return false; }
+    if (job.state === "error") {
+      showError(job.error);
+      // No confident match (or a wrong one): offer the YouTube-link override. Not for
+      // albums, playlists, ...: those are refused whatever video is given.
+      if (isSpotifyTrack($("source").value)) {
+        if (matchBox.hidden) $("match-text").textContent = "Pick the recording yourself:";
+        matchBox.hidden = false;
+      }
+      return false;
+    }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 }
@@ -280,7 +325,7 @@ async function poll(jobId, onDone) {
 // One job at a time, like the server: both buttons are disabled while one runs.
 async function runJob(url, extra, button, busyText, onDone) {
   const idleText = button.textContent;
-  go.disabled = transcribe.disabled = true;
+  go.disabled = transcribe.disabled = $("use-video").disabled = true;
   button.textContent = busyText;
   errorBox.hidden = true;
   showSteps([], false);
@@ -300,7 +345,7 @@ async function runJob(url, extra, button, busyText, onDone) {
   } finally {
     stopTimer(finished);
     notesBar.hidden = true;
-    go.disabled = transcribe.disabled = false;
+    go.disabled = transcribe.disabled = $("use-video").disabled = false;
     button.textContent = idleText;
   }
 }
@@ -410,6 +455,7 @@ function showNotes(t, jobId) {
   $("midi").hidden = $("musicxml").hidden = !t.notes.length;
   notesFooter.hidden = false;
   lastJobId = t.notes.length ? jobId : null;
+  showMatch(t.match);
   showNotesView();
 }
 
@@ -505,13 +551,27 @@ appInfo.then((info) => {
   });
 })();
 
-form.addEventListener("submit", (event) => {
-  event.preventDefault();
+function analyzeSong(extra, button, busyText) {
   chartWrap.hidden = true;
-  runJob("/api/analyze", {}, go, "Analyzing…", (job) => {
+  if (!isSpotify($("source").value)) matchBox.hidden = true;
+  runJob("/api/analyze", extra, button, busyText, (job) => {
     chart.textContent = job.chart;
     chartWrap.hidden = false;
+    showMatch(job.song.match);
   });
+}
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  matchBox.hidden = true;
+  analyzeSong({}, go, "Analyzing…");
+});
+
+$("use-video").addEventListener("click", () => {
+  const video = $("video").value.trim();
+  if (!video) { $("video").focus(); return; }
+  analyzeSong({ video }, $("use-video"), "Analyzing…");
+  $("video").value = "";
 });
 
 transcribe.addEventListener("click", () => {

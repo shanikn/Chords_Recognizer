@@ -224,6 +224,7 @@ def _analyze(
     return Song(
         title=resolved.title,
         source=resolved.source,
+        match=resolved.match,
         duration=duration,
         key=key,
         bpm=beats.bpm,

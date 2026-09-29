@@ -110,6 +110,7 @@ def test_unexpected_errors_are_reported_not_hidden():
         ({"source": "  "}, "enter a link or a file path"),
         ({"source": LINK, "start": "1:75"}, "minutes and seconds must be below 60"),
         ({"source": LINK, "start": "2:00", "end": "1:00"}, "the end must be after the start"),
+        ({"source": LINK, "video": LINK}, "only be given for a Spotify link"),
     ],
 )
 def test_bad_input_is_rejected_before_starting(body, message):
@@ -281,7 +282,9 @@ def test_desktop_quit_button_and_heartbeat():
     assert desktop.last_seen > before
 
     assert client.post("/api/quit", json={}).status_code == 200
-    time.sleep(0.5)  # quit runs just after the response
+    deadline = time.monotonic() + 5  # quit runs just after the response
+    while not quits and time.monotonic() < deadline:
+        time.sleep(0.02)
     assert quits == [True]
 
 
@@ -419,3 +422,20 @@ def test_sheet_music_renderer_is_served_locally():
     page = client.get("/").text
     assert "/vendor/opensheetmusicdisplay.min.js" in page
     assert not re.search(r"""(src|href)\s*=\s*["'`]https?://""", page)  # nothing from the web
+
+
+def test_a_spotify_video_override_is_recorded_before_the_analysis(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        server.spotify, "match_track", lambda source, folder, **kw: calls.append(("match", source, kw["video_link"]))
+    )
+
+    def analyze(source, **kw):
+        calls.append(("analyze", source))
+        raise VideoUnavailableError("stop here")
+
+    client = _client(analyze)
+    spotify_link = "https://open.spotify.com/track/3n3Ppam7vgaVa1iaRUc9Lp"
+    body = {"source": spotify_link, "video": "https://youtu.be/l7MaKmKJqoc"}
+    _wait(client, client.post("/api/analyze", json=body).json()["job_id"])
+    assert calls == [("match", spotify_link, "https://youtu.be/l7MaKmKJqoc"), ("analyze", spotify_link)]
