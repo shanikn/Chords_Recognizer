@@ -70,6 +70,9 @@ class Song:
     timings: dict[str, float] = field(default_factory=dict)
     # ...the wall-clock seconds for the whole analysis.
     elapsed: float = 0.0
+    # For a Spotify link: the track and the YouTube video analysed instead
+    # (spotify.Match.to_dict). None for other sources.
+    match: dict | None = None
     # Intermediate chord sequences, per pipeline stage, for the eval harness (spec §7).
     debug: dict[str, list[Segment]] = field(default_factory=dict)
 

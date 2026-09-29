@@ -46,6 +46,7 @@ class Transcription:
     warnings: list[str] = field(default_factory=list)
     timings: dict[str, float] = field(default_factory=dict)
     elapsed: float = 0.0
+    match: dict | None = None  # for a Spotify link: see Song.match
 
     def to_dict(self) -> dict:
         return asdict(self)

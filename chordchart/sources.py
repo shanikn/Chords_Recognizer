@@ -1,7 +1,9 @@
 """What the user typed -> a local audio file plus a title.
 
-A link (http/https) is downloaded, or served from the cache, by download.py. Anything
-else is a path. Everything after this point handles both identically.
+A link (http/https) is downloaded, or served from the cache, by download.py. A Spotify
+track link is first matched to the same recording on YouTube (spotify.py; Spotify's own
+audio is never used). Anything else is a path. Everything after this point handles all
+of them identically.
 """
 
 from __future__ import annotations
@@ -12,7 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from chordchart.download import download
+from chordchart import spotify
+from chordchart.download import default_cache_dir, download
 from chordchart.errors import AudioDecodeError
 from chordchart.fetch import DEFAULT_MAX_DURATION
 
@@ -26,7 +29,8 @@ _VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 class ResolvedSource:
     path: Path  # local audio/video file
     title: str
-    source: str  # what the user typed
+    source: str  # what the user typed (for Spotify: the matched YouTube link)
+    match: dict | None = None  # Spotify link -> YouTube video, see spotify.Match.to_dict
 
 
 def is_link(arg: str) -> bool:
@@ -64,6 +68,14 @@ def resolve_source(
     refresh: bool = False,
     status: Callable[[str], None] | None = None,
 ) -> ResolvedSource:
+    if spotify.is_spotify(arg):
+        folder = default_cache_dir() / "downloads"
+        match = spotify.match_track(arg, folder, refresh=refresh, status=status)
+        got = download(match.video.url, cache_dir=folder, max_duration=max_duration,
+                       refresh=refresh, status=status)  # fmt: skip
+        title = f"{match.track.artist} - {match.track.title}" if match.track.artist else match.track.title
+        return ResolvedSource(got.path, title, match.video.url, match.to_dict())
+
     if is_link(arg):
         link = normalize_link(arg)
         if link != arg and status:

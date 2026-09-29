@@ -2,8 +2,9 @@ ChordChart
 ==========
 
 Detects the chords of a song and prints a bar-aligned chord chart with key, tempo and
-time signature. Works on local audio/video files and on video links (YouTube and other
-sites supported by yt-dlp). Local use only. The chord and key models come from madmom
+time signature. Works on local audio/video files, on video links (YouTube and other
+sites supported by yt-dlp) and on Spotify track links (matched to the same recording on
+YouTube; see below). Local use only. The chord and key models come from madmom
 (model files licensed CC BY-NC-SA 4.0, so non-commercial use only); beats and downbeats
 come from Beat This! (CPJKU, MIT) run on onnxruntime, with madmom's DBN.
 
@@ -28,6 +29,7 @@ Usage
 -----
     uv run chordchart path/to/song.mp3
     uv run chordchart "https://www.youtube.com/watch?v=..."
+    uv run chordchart "https://open.spotify.com/track/..."
     uv run chordchart song.mp3 --start 1:05 --end 2:10    # just part of the song
     uv run chordchart song.mp3 --format json -o song.json
     uv run chordchart --help
@@ -56,8 +58,8 @@ offline. Download MusicXML opens in MuseScore, Finale, Sibelius, Dorico and othe
 How: Demucs (htdemucs_6s) splits the song into stems; vocals and drums are dropped; the
 loudest of bass, guitar, piano and other is transcribed by Spotify's basic-pitch; notes
 are snapped to 16ths of the chart's beats, and very short or quiet ones are dropped.
-Speed: separating the stems runs on the CPU at about twice the audio's length (a 35 s
-section takes ~80 s, a whole 4-minute song ~8 min), so prefer a section. The stems are
+Speed: separating the stems runs on the CPU at roughly the audio's length (a whole
+2-minute song ~80 s, a 5-minute one ~4-5 min), so prefer a section. The stems are
 cached, so another instrument for the same section takes seconds.
 The Demucs model (53 MB, MIT) is downloaded once, on first use, into
 %LOCALAPPDATA%\ChordChart\models. Cached stems: %LOCALAPPDATA%\chordchart\cache\stems
@@ -70,6 +72,26 @@ PowerShell splits an unquoted link at "&". Either quote it, or let chordchart as
     uv run chordchart --clipboard      # takes the link you just copied
 Full links can be pasted as-is: playlist/radio parameters (&list=, &start_radio=,
 &index=, ...) are ignored and only the video is analysed.
+
+Spotify links
+-------------
+Spotify's audio can't be used: it is DRM-protected, Spotify's Developer Terms forbid
+downloading it or feeding it to ML models, and 30 s previews are no longer available to
+new apps. So for a track link (open.spotify.com/track/..., spotify:track:...) ChordChart
+reads only the track's title, artists and length, searches YouTube for "artist - title",
+and analyses the result within 3 s of Spotify's length, preferring the artist's
+"<Artist> - Topic" channel (the studio recording). If none is that close it says "no
+confident match" instead of guessing. The page shows which video was used, and "Use
+this video" takes a YouTube link of your choice instead; ChordChart remembers it.
+Albums, playlists, artists, podcasts and spotify.link short links are refused with a
+message saying so.
+Track details come from the Spotify Web API when a key is set up, else from the public
+track page. A key is optional (free, https://developer.spotify.com/dashboard, "Web API"):
+    set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET, or put them in
+    %LOCALAPPDATA%\ChordChart\settings.json as
+    {"spotify_client_id": "...", "spotify_client_secret": "..."}
+Matches are cached in cache\downloads\spotify.json; Spotify's details in it are
+refreshed after 30 days (their terms allow temporary caching only).
 
 Caches
 ------
@@ -85,8 +107,9 @@ a couple of seconds instead of the full analysis.
 
 Speed
 -----
-Beats, chords and key run at the same time; beat tracking uses 4 worker processes.
-A 3.5-minute song takes about 35-45 s the first time on an 8-core machine.
+Beat tracking runs at the same time as chords and key (4 threads). On a 4-core laptop a
+song takes about 10 s (2 min) to 16 s (6 min) the first time, and about 1 s again
+(cached). Beat This!'s network is most of that; experiments/profile/ has the profilers.
 `chordchart serve` keeps the models loaded between analyses.
 
 If YouTube downloads start failing, upgrade yt-dlp:
