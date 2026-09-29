@@ -98,7 +98,12 @@ def main():
                 folder = stems._store(Path(tmp), kept)
                 notes[label] = {k: transcribe.transcribe(folder.path(k), k) for k in INSTRUMENTS}
             print(f"{name} overlap {label}: {seconds:.1f} s, auto stem {chosen[label]}", flush=True)
-        song = {"seconds": len(mix[0]) / 44100, "separation_s": times, "auto_stem": chosen, "f1": {}}
+        song = {
+            "seconds": len(mix[0]) / 44100,
+            "separation_s": times,
+            "auto_stem": chosen,
+            "f1": {},
+        }
         for k in INSTRUMENTS:
             a, b, low = notes["0.25a"][k], notes["0.25b"][k], notes["0.1"][k]
             song["f1"][k] = {

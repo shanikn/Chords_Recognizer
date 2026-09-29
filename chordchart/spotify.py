@@ -177,7 +177,10 @@ def track_from_api(ident: str, creds: tuple[str, str], http: Callable = _http) -
     token_request = urllib.request.Request(
         "https://accounts.spotify.com/api/token",
         data=b"grant_type=client_credentials",
-        headers={"Authorization": f"Basic {basic}", "Content-Type": "application/x-www-form-urlencoded"},
+        headers={
+            "Authorization": f"Basic {basic}",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
     )
     token = json.loads(http(token_request))["access_token"]
     track_request = urllib.request.Request(
@@ -214,7 +217,9 @@ def track_from_page(ident: str, http: Callable = _http) -> Track:
             "couldn't read this track's details from Spotify's page; paste a YouTube link of "
             "the song instead"
         )
-    return Track(id=ident, title=title, artists=artists, duration=float(duration) if duration else None)
+    return Track(
+        id=ident, title=title, artists=artists, duration=float(duration) if duration else None
+    )
 
 
 def fetch_track(ident: str, data_dir: Path | None = None, http: Callable = _http) -> Track:
@@ -315,7 +320,9 @@ def _from_entry(entry: dict) -> Match:
     return Match(Track(**entry["track"]), Video(**entry["video"]), entry["chosen_by"])
 
 
-def cached_match(ident: str, folder: Path, now: float | None = None, *, stale: bool = False) -> Match | None:
+def cached_match(
+    ident: str, folder: Path, now: float | None = None, *, stale: bool = False
+) -> Match | None:
     """The saved match for track `ident`; None if there is none, or if it is older than
     MATCH_MAX_AGE (unless `stale`: then its age doesn't matter)."""
     entry = _read(folder / MATCHES).get(ident)
@@ -367,7 +374,10 @@ def match_track(
     saved = None if video_link is not None else cached_match(ident, folder, stale=True)
     # `refresh` redoes the search, but never throws away the user's own choice.
     if saved and (not refresh or saved.chosen_by == "user") and cached_match(ident, folder):
-        say(f"Spotify: {saved.track.artist} - {saved.track.title} → YouTube: {saved.video.title} (saved match)")
+        say(
+            f"Spotify: {saved.track.artist} - {saved.track.title} → YouTube: "
+            f"{saved.video.title} (saved match)"
+        )
         return saved
     # settings.json sits in the app's data folder, above cache/downloads
     track = fetch_track(ident, data_dir=folder.parent.parent, http=http)

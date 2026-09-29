@@ -31,7 +31,9 @@ def results(*videos):
 
 
 TOPIC = Video("topic1234567", "Mr. Brightside", "The Killers - Topic", 223)
-OFFICIAL = Video("official1234", "The Killers - Mr. Brightside (Official Music Video)", "TheKillersVEVO", 243)
+OFFICIAL = Video(
+    "official1234", "The Killers - Mr. Brightside (Official Music Video)", "TheKillersVEVO", 243
+)
 LIVE = Video("live12345678", "Mr. Brightside (Live)", "Some Fan", 221)
 
 
@@ -263,7 +265,10 @@ def test_youtube_links_are_unchanged(monkeypatch, tmp_path):
 
 def test_refresh_redoes_a_search_but_keeps_the_users_choice(folder):
     spotify.remember(Match(TRACK, OFFICIAL, "search"), folder)
-    assert spotify.match_track(LINK, folder, refresh=True, http=page_http, search=results(TOPIC)).video == TOPIC
+    assert (
+        spotify.match_track(LINK, folder, refresh=True, http=page_http, search=results(TOPIC)).video
+        == TOPIC
+    )
 
     mine = Video("mine12345678", "Mr. Brightside (acoustic)", "Me", 230)
     spotify.remember(Match(TRACK, mine, "user"), folder)
@@ -271,7 +276,10 @@ def test_refresh_redoes_a_search_but_keeps_the_users_choice(folder):
     def no_search(query):
         raise AssertionError("the user's choice must not be searched again")
 
-    assert spotify.match_track(LINK, folder, refresh=True, http=page_http, search=no_search).video == mine
+    assert (
+        spotify.match_track(LINK, folder, refresh=True, http=page_http, search=no_search).video
+        == mine
+    )
 
 
 def test_an_old_user_choice_keeps_its_video_but_refreshes_the_track_details(folder):

@@ -468,7 +468,9 @@ async def _save_upload(request: Request, name: str, folder: Path) -> Path:
 def _use_video(source: str, body: dict, status: Callable) -> None:
     """Record the user's own YouTube video for a Spotify track (the analysis then uses it)."""
     if video := str(body.get("video") or "").strip():
-        spotify.match_track(source, default_cache_dir() / "downloads", video_link=video, status=status)
+        spotify.match_track(
+            source, default_cache_dir() / "downloads", video_link=video, status=status
+        )
 
 
 def _attachment(name: str) -> str:

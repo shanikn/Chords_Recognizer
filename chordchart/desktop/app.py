@@ -58,7 +58,9 @@ def main() -> int:
         return run(sys.argv[2] if len(sys.argv) >= 3 else "chordchart-selftest.json")
 
     return _run_app(
-        log_file, open_browser="--no-browser" not in sys.argv, allow_window="--browser" not in sys.argv
+        log_file,
+        open_browser="--no-browser" not in sys.argv,
+        allow_window="--browser" not in sys.argv,
     )
 
 

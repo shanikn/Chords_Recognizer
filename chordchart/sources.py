@@ -73,7 +73,11 @@ def resolve_source(
         match = spotify.match_track(arg, folder, refresh=refresh, status=status)
         got = download(match.video.url, cache_dir=folder, max_duration=max_duration,
                        refresh=refresh, status=status)  # fmt: skip
-        title = f"{match.track.artist} - {match.track.title}" if match.track.artist else match.track.title
+        title = (
+            f"{match.track.artist} - {match.track.title}"
+            if match.track.artist
+            else match.track.title
+        )
         return ResolvedSource(got.path, title, match.video.url, match.to_dict())
 
     if is_link(arg):

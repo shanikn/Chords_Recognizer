@@ -72,7 +72,9 @@ def test_children_die_with_the_app():
 
 
 def _alive(pid: int) -> bool:
-    out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True).stdout
+    out = subprocess.run(
+        ["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True
+    ).stdout
     return str(pid) in out
 
 

@@ -1,6 +1,6 @@
 """Beat This! (onnxruntime) time by thread count and session options, one song.
 
-    uv run python experiments/profile/beat_threads.py
+uv run python experiments/profile/beat_threads.py
 """
 
 import os

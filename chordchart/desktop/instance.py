@@ -118,7 +118,12 @@ def kill_children_on_exit() -> bool:
     kernel32.CreateJobObjectW.restype = wintypes.HANDLE
     kernel32.GetCurrentProcess.restype = wintypes.HANDLE
     kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
-    kernel32.SetInformationJobObject.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
+    kernel32.SetInformationJobObject.argtypes = [
+        wintypes.HANDLE,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+    ]
     job = kernel32.CreateJobObjectW(None, None)
     if not job:
         log.warning("no Job Object (error %d)", ctypes.get_last_error())

@@ -17,19 +17,21 @@ from common import DOWNLOADS  # noqa: E402
 
 def worker(mode: str, song: str) -> None:
     import psutil
-
-    from chordchart.fastconv import accelerated
-    from chordchart.fetch import decode_section, load_signal
-
     from madmom.features.chords import CNNChordFeatureProcessor, CRFChordRecognitionProcessor
     from madmom.features.key import CNNKeyRecognitionProcessor
 
     import chordchart.fastconv as fastconv
+    from chordchart.fastconv import accelerated
+    from chordchart.fetch import decode_section, load_signal
 
     if mode.startswith("fast") and mode != "fast":
         fastconv._BLOCK_BYTES = int(mode[4:]) * 2**20  # e.g. fast16: 16 MB blocks
     wrap = accelerated if mode.startswith("fast") else (lambda p: p)
-    cnn, crf, key = wrap(CNNChordFeatureProcessor()), CRFChordRecognitionProcessor(), wrap(CNNKeyRecognitionProcessor())
+    cnn, crf, key = (
+        wrap(CNNChordFeatureProcessor()),
+        CRFChordRecognitionProcessor(),
+        wrap(CNNKeyRecognitionProcessor()),
+    )
     with tempfile.TemporaryDirectory() as tmp:
         wav = Path(tmp) / "a.wav"
         decode_section(Path(song), wav)

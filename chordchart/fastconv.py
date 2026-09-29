@@ -45,18 +45,25 @@ class FastConvolution:
         data = np.ascontiguousarray(data, dtype=np.float32)
         frames, bins, channels = data.shape
         if channels != self.channels:
-            raise ValueError("Number of channels in weight vector different from number of channels of input data!")
+            raise ValueError(
+                "Number of channels in weight vector different from number of channels of "
+                "input data!"
+            )
         size_time, size_freq = self.kernel
         out_frames, out_bins = frames - size_time + 1, bins - size_freq + 1
         out = np.empty((out_frames, out_bins, self.matrix.shape[1]), dtype=np.float32)
         # windows[t, f] is (size_time, size_freq, channels): a view, nothing copied yet.
         # Channels innermost, as in `data`, so unfolding a block copies contiguous runs.
-        windows = sliding_window_view(data, (size_time, size_freq), axis=(0, 1)).transpose(0, 1, 3, 4, 2)
+        windows = sliding_window_view(data, (size_time, size_freq), axis=(0, 1)).transpose(
+            0, 1, 3, 4, 2
+        )
         row = out_bins * self.matrix.shape[0] * 4
         step = max(1, _BLOCK_BYTES // row)
         for start in range(0, out_frames, step):
             block = windows[start : start + step].reshape(-1, self.matrix.shape[0])
-            np.matmul(block, self.matrix, out=out[start : start + step].reshape(-1, self.matrix.shape[1]))
+            np.matmul(
+                block, self.matrix, out=out[start : start + step].reshape(-1, self.matrix.shape[1])
+            )
         out += self.bias
         if self.activation_fn is not None:
             self.activation_fn(out, out=out)

@@ -24,7 +24,9 @@ def detect_key(wav_path: Path, processors: Processors | None = None) -> Key:
 
     from chordchart.fastconv import accelerated
 
-    key_cnn = processors.key if processors is not None else accelerated(CNNKeyRecognitionProcessor())
+    key_cnn = (
+        processors.key if processors is not None else accelerated(CNNKeyRecognitionProcessor())
+    )
     prediction = key_cnn(model_input(wav_path))
     tonic, mode = key_prediction_to_label(prediction).split()  # "G# minor"
     return Key(tonic=tonic, mode=mode, confidence=float(np.max(prediction)))

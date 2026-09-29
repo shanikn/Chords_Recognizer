@@ -24,9 +24,14 @@ def main():
     crf = CRFChordRecognitionProcessor()
     models = {
         "madmom": (CNNChordFeatureProcessor(), CNNKeyRecognitionProcessor()),
-        "fast": (accelerated(CNNChordFeatureProcessor()), accelerated(CNNKeyRecognitionProcessor())),
+        "fast": (
+            accelerated(CNNChordFeatureProcessor()),
+            accelerated(CNNKeyRecognitionProcessor()),
+        ),
     }
-    songs = sorted(p for p in DOWNLOADS.iterdir() if p.suffix in {".webm", ".m4a", ".mp3", ".opus"})[:limit]
+    songs = sorted(
+        p for p in DOWNLOADS.iterdir() if p.suffix in {".webm", ".m4a", ".mp3", ".opus"}
+    )[:limit]
     differing = 0
     totals = {name: 0.0 for name in models}
     for song in songs:
@@ -47,7 +52,9 @@ def main():
         if not same:
             a, b = out["madmom"], out["fast"]
             print("   key", a[1], b[1], "| segments", len(a[0]), len(b[0]))
-            print("   first diffs", [(x, y) for x, y in zip(a[0], b[0], strict=False) if x != y][:5])
+            print(
+                "   first diffs", [(x, y) for x, y in zip(a[0], b[0], strict=False) if x != y][:5]
+            )
     print(f"\n{len(songs)} songs, {differing} different; chords+key time madmom "
           f"{totals['madmom']:.0f} s, fast {totals['fast']:.0f} s")  # fmt: skip
 

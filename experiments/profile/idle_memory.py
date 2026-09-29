@@ -37,7 +37,11 @@ def snapshot(label: str, peak_mb: int | None = None) -> None:
         total_private += private
         parts.append(f"{name}: rss {info.rss >> 20} / private {private >> 20}")
     peak = f"  peak during: {peak_mb} MB" if peak_mb is not None else ""
-    print(f"{label:30} tree rss {total_rss >> 20:5} MB, private {total_private >> 20:5} MB{peak}  [{'; '.join(parts)}]", flush=True)
+    print(
+        f"{label:30} tree rss {total_rss >> 20:5} MB, private {total_private >> 20:5} MB"
+        f"{peak}  [{'; '.join(parts)}]",
+        flush=True,
+    )
 
 
 def measured(fn):
