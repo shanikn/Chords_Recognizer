@@ -6,12 +6,19 @@ development they come from PATH (ffmpeg) and the `deno` Python package.
 
 `UPDATE_HINT` is what a failed download suggests. The desktop app replaces the
 developer command with its own "Update YouTube support" button.
+
+`https_context()` is for the app's own urllib requests (Spotify, the yt-dlp updater).
+A freshly installed Windows holds only a few root certificates and adds others when a
+browser first needs them; Python can't trigger that, so HTTPS to some sites fails with
+"certificate verify failed" (found by the Windows Sandbox test). certifi's bundle,
+shipped with the app (yt-dlp and huggingface_hub already use it), is trusted as well.
 """
 
 from __future__ import annotations
 
 import os
 import shutil
+import ssl
 import sys
 from pathlib import Path
 
@@ -74,3 +81,14 @@ def deno_path() -> str | None:
         return find_deno_bin()
     except Exception:  # not installed, or its binary is missing: yt-dlp searches PATH
         return shutil.which("deno")
+
+
+def https_context() -> ssl.SSLContext:
+    """TLS verification against Windows' certificate store plus certifi's bundle."""
+    context = ssl.create_default_context()  # the Windows store
+    try:
+        import certifi
+    except ImportError:
+        return context
+    context.load_verify_locations(cafile=certifi.where())
+    return context

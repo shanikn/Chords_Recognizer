@@ -293,3 +293,16 @@ def test_an_old_user_choice_keeps_its_video_but_refreshes_the_track_details(fold
     match = spotify.match_track(LINK, folder, http=page_http, search=no_search)
     assert match == Match(TRACK, mine, "user")  # details from Spotify again, same video
     assert spotify.cached_match(TRACK_ID, folder) == match
+
+
+def test_https_trusts_certifi_too():
+    # A fresh Windows lacks many root certificates (found in Windows Sandbox); requests
+    # made with urllib must trust certifi's bundle as well.
+    import certifi
+
+    from chordchart import bundled
+
+    context = bundled.https_context()
+    assert context.verify_mode.name == "CERT_REQUIRED"
+    bundle = open(certifi.where(), encoding="ascii").read().count("BEGIN CERTIFICATE")
+    assert context.cert_store_stats()["x509_ca"] >= bundle

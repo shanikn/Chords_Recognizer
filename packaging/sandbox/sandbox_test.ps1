@@ -119,25 +119,34 @@ try {
     "state=$($again.state) cached=$cached seconds=$([int]((Get-Date) - $began).TotalSeconds)" | Set-Content (Join-Path $out "cache.txt")
     Say "repeat: $($again.state), cached analysis: $cached"
 
-    Say "a Spotify track link (matched on YouTube)"
-    $spotifyBody = '{"source":"https://open.spotify.com/track/3n3Ppam7vgaVa1iaRUc9Lp","start":"0:30","end":"1:10"}'
-    $job = Invoke-RestMethod "${url}api/analyze" -Method Post -ContentType "application/json" -Body $spotifyBody
-    $spotify = WaitJob $url $job.job_id 300
-    $spotify | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $out "spotify.json")
-    Say "Spotify: $($spotify.state) $($spotify.error)"
+    # Each check below runs on its own: a failure is recorded and the next one still runs.
+    try {
+        Say "a Spotify track link (matched on YouTube)"
+        $spotifyBody = '{"source":"https://open.spotify.com/track/3n3Ppam7vgaVa1iaRUc9Lp","start":"0:30","end":"1:10"}'
+        $job = Invoke-RestMethod "${url}api/analyze" -Method Post -ContentType "application/json" -Body $spotifyBody
+        $spotify = WaitJob $url $job.job_id 300
+        $spotify | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $out "spotify.json")
+        Say "Spotify: $($spotify.state) $($spotify.error)"
+    } catch { Say "Spotify check failed: $_" }
 
-    Say "a local file through Choose file (upload)"
-    $song = Get-ChildItem (Join-Path $env:LOCALAPPDATA "chordchart\cache\downloads") -Filter "youtube-2eZVbrO6Z1M.*" |
-        Where-Object { $_.Extension -ne ".json" } | Select-Object -First 1
-    $upload = Invoke-RestMethod "${url}api/upload?name=My%20Song$($song.Extension)" -Method Post -ContentType "application/octet-stream" -InFile $song.FullName
-    $fileBody = @{ source = $upload.path; start = "0:20"; end = "1:00" } | ConvertTo-Json
-    $job = Invoke-RestMethod "${url}api/analyze" -Method Post -ContentType "application/json" -Body $fileBody
-    $local = WaitJob $url $job.job_id 300
-    $local | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $out "localfile.json")
-    Say "local file: $($local.state), title: $($local.song.title)"
+    try {
+        Say "a local file through Choose file (upload)"
+        $song = Get-ChildItem (Join-Path $env:LOCALAPPDATA "chordchart\cache\downloads") -Filter "youtube-2eZVbrO6Z1M.*" |
+            Where-Object { $_.Extension -ne ".json" } | Select-Object -First 1
+        Say "uploading $($song.Name) ($($song.Length) bytes)"
+        # curl.exe (part of Windows 10/11) sends the file like the page's fetch() does.
+        $response = & curl.exe -s -S -X POST -H "Content-Type: application/octet-stream" --data-binary "@$($song.FullName)" "${url}api/upload?name=My%20Song$($song.Extension)" 2>&1
+        Say "upload response: $response"
+        $upload = $response | ConvertFrom-Json
+        $fileBody = @{ source = $upload.path; start = "0:20"; end = "1:00" } | ConvertTo-Json
+        $job = Invoke-RestMethod "${url}api/analyze" -Method Post -ContentType "application/json" -Body $fileBody
+        $local = WaitJob $url $job.job_id 300
+        $local | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $out "localfile.json")
+        Say "local file: $($local.state), title: $($local.song.title)"
+    } catch { Say "local file check failed: $_" }
 
     $info = Invoke-RestMethod "${url}api/app"
-    if ($info.notes) {
+    if ($info.notes) { try {
         Say "notes: transcribing the YouTube section (downloads the Demucs model first)"
         $job = Invoke-RestMethod "${url}api/notes" -Method Post -ContentType "application/json" -Body $body
         $notes = WaitJob $url $job.job_id 1200
@@ -150,7 +159,7 @@ try {
         $count = @($notes.notes.notes).Count
         "state=$($notes.state) notes=$count instrument=$($notes.notes.instrument) midi_bytes=$((Get-Item $midi -ErrorAction SilentlyContinue).Length) musicxml_bytes=$((Get-Item $xml -ErrorAction SilentlyContinue).Length) error=$($notes.error)" | Set-Content (Join-Path $out "notes.txt")
         Say "notes: $($notes.state), $count notes"
-    }
+    } catch { Say "notes check failed: $_" } }
 
     $before = @(Get-Process ChordChart -ErrorAction SilentlyContinue).Count
     Say "quitting (processes before: $before)"
@@ -169,6 +178,7 @@ try {
     "running_at_20s=$running after_90s=$afterIdle" | Set-Content (Join-Path $out "idle.txt")
     Say "idle: running at 20 s: $running, after 90 s: $afterIdle"
 
+    try {
     Say "the app's window: start as from the shortcut (no arguments)"
     Remove-Item Env:CHORDCHART_IDLE_EXIT
     Start-Process $exe
@@ -186,6 +196,7 @@ try {
     Start-Sleep 10
     "windows=$windows window_mode=$($windowInfo.window) second_exited=$secondExited windows_after_second=$windowsAfter after_quit=$(AppCount)" | Set-Content (Join-Path $out "window.txt")
     Say "window: $windows, window mode: $($windowInfo.window), second launch exited: $secondExited, after quit: $(AppCount)"
+    } catch { Say "window check failed: $_"; Get-Process ChordChart -ErrorAction SilentlyContinue | Stop-Process -Force }
 
     if ($mode -eq "installer") {
         $uninstaller = Join-Path $installDir "unins000.exe"
@@ -197,10 +208,10 @@ try {
         "app_removed=$gone desktop_shortcut_left=$desktopLink" | Set-Content (Join-Path $out "uninstall.txt")
         Say "uninstalled: $gone; desktop shortcut left: $desktopLink"
     }
-    Copy-Item $appLog (Join-Path $out "app-log.txt") -ErrorAction SilentlyContinue
 } catch {
     Say "ERROR: $_"
 } finally {
+    if ($appLog) { Copy-Item $appLog (Join-Path $out "app-log.txt") -ErrorAction SilentlyContinue }
     Say "done"
     "done" | Set-Content (Join-Path $out "done.txt")
 }

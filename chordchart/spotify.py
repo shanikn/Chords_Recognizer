@@ -29,6 +29,7 @@ from __future__ import annotations
 import base64
 import html
 import json
+import logging
 import os
 import re
 import time
@@ -39,7 +40,10 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from chordchart import bundled
 from chordchart.errors import InvalidLinkError, NetworkError, SpotifyMatchError
+
+log = logging.getLogger(__name__)
 
 TOLERANCE = 3.0  # seconds between Spotify's and the video's duration
 SEARCH_RESULTS = 5
@@ -146,11 +150,13 @@ def track_id(arg: str) -> str:
 
 def _http(request: urllib.request.Request | str, timeout: float = 15) -> bytes:
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+        context = bundled.https_context()  # a fresh Windows lacks some root certificates
+        with urllib.request.urlopen(request, timeout=timeout, context=context) as response:  # noqa: S310
             return response.read()
     except urllib.error.HTTPError:
         raise  # the server answered: callers decide what a 404 or 401 means
     except (urllib.error.URLError, TimeoutError, OSError) as err:
+        log.warning("Spotify request failed: %r", err)  # the reason, in the app's log
         raise NetworkError(
             "network error: could not reach Spotify; check your internet connection"
         ) from err
