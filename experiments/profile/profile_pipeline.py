@@ -3,6 +3,8 @@
 memory per phase (whole process tree, sampled every 20 ms).
 
     uv run --with psutil python experiments/profile/profile_pipeline.py [--songs a b] [--notes SONG]
+        [--madmom-conv]      madmom's own convolution (before chordchart.fastconv)
+        [--dbn-threads N]    Beat This!'s DBN: 1 = in-process, 2 = worker pool
 
 The work runs in a child process ("worker"); the parent samples its memory and tags it
 with the phase the worker announces. Songs are cached downloads (paths, so --refresh-like
@@ -35,7 +37,16 @@ def emit(kind: str, **data) -> None:
     print(json.dumps({"kind": kind, **data}), flush=True)
 
 
-def worker(song_keys: list[str], notes_key: str | None) -> None:
+def worker(song_keys: list[str], notes_key: str | None, madmom_conv: bool = False, dbn_threads=None) -> None:
+    if dbn_threads is not None:
+        import chordchart.beat_this
+
+        make_dbn = chordchart.beat_this.make_dbn
+        chordchart.beat_this.make_dbn = lambda beats_per_bar, threads=1: make_dbn(beats_per_bar, dbn_threads)
+    if madmom_conv:
+        import chordchart.fastconv
+
+        chordchart.fastconv.accelerated = lambda processor: processor
     began = time.perf_counter()
     from functools import partial
 
@@ -120,11 +131,19 @@ def main() -> None:
     notes = NOTES_SONG
     if "--songs" in args:
         i = args.index("--songs")
-        songs = [a for a in args[i + 1 :] if not a.startswith("--")]
+        songs = []
+        for a in args[i + 1 :]:
+            if a.startswith("--"):
+                break
+            songs.append(a)
     if "--notes" in args:
         i = args.index("--notes")
         notes = None if args[i + 1] == "none" else args[i + 1]
     cmd = [sys.executable, str(HERE), "--worker", json.dumps(songs), json.dumps(notes)]
+    if "--madmom-conv" in args:
+        cmd.append("--madmom-conv")
+    if "--dbn-threads" in args:
+        cmd += ["--dbn-threads", args[args.index("--dbn-threads") + 1]]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
     ps = psutil.Process(proc.pid)
     phase = ["start"]
@@ -153,6 +172,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--worker":
-        worker(json.loads(sys.argv[2]), json.loads(sys.argv[3]))
+        dbn = int(sys.argv[sys.argv.index("--dbn-threads") + 1]) if "--dbn-threads" in sys.argv else None
+        worker(json.loads(sys.argv[2]), json.loads(sys.argv[3]), "--madmom-conv" in sys.argv, dbn)
     else:
         main()

@@ -15,8 +15,9 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
 # Bytes of unfolded input per block: bounds the extra memory to ~this much however long
-# the song is.
-_BLOCK_BYTES = 64 * 2**20
+# the song is. 8 MB: peak memory as with madmom's own convolution, and no slower than
+# larger blocks (experiments/profile/cnn_memory.py).
+_BLOCK_BYTES = 8 * 2**20
 
 
 class FastConvolution:
