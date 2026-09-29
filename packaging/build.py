@@ -9,7 +9,9 @@ Steps:
    checked against its SHA-256; ffmpeg.exe is extracted from it.
 2. Licenses of every bundled component (collect_licenses.py), then PyInstaller
    (packaging/chordchart.spec) -> packaging/dist/<app name>/.
-3. Zip that folder -> packaging/out/<ChordChart|ChordChartNotes>-<version>-win64.zip.
+3. secrets_check.py: the folder must not hold this PC's Spotify key or per-user files
+   (settings.json, caches). Then zip it ->
+   packaging/out/<ChordChart|ChordChartNotes>-<version>-win64.zip.
 4. With --installer: Inno Setup (packaging/installer.iss) ->
    packaging/out/<ChordChart|ChordChartNotes>-Setup-<version>.exe.
 Each variant has its own work folder, packaging/build/<variant>/.
@@ -29,6 +31,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
+import secrets_check  # noqa: E402
 import variants  # noqa: E402
 
 VENDOR, OUT = HERE / "vendor", HERE / "out"
@@ -56,6 +59,7 @@ def main() -> int:
     subprocess.run([sys.executable, str(HERE / "collect_licenses.py")], check=True)
     pyinstaller(variant)
     folder = HERE / "dist" / variant.app_name
+    secrets_check.check(folder)  # before anything is packed from it
     zip_path = OUT / f"{variant.file_stem}-{__version__}-win64.zip"
     make_zip(folder, zip_path, variant.app_name)
     print(f"{variant.app_name} ({variant.key})")
