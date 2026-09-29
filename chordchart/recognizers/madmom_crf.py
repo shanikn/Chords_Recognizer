@@ -51,7 +51,9 @@ class MadmomCRFRecognizer:
                 CRFChordRecognitionProcessor,
             )
 
-            cnn, crf = CNNChordFeatureProcessor(), CRFChordRecognitionProcessor()
+            from chordchart.fastconv import accelerated
+
+            cnn, crf = accelerated(CNNChordFeatureProcessor()), CRFChordRecognitionProcessor()
         rows = crf(cnn(model_input(wav_path)))
         return [
             Segment(float(start), float(end), str(label))

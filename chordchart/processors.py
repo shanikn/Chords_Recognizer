@@ -28,15 +28,17 @@ class Processors:
         from madmom.features.key import CNNKeyRecognitionProcessor
 
         from chordchart.beat_this import BeatThisModel, make_dbn
+        from chordchart.fastconv import accelerated
 
         self.beats_per_bar = tuple(beats_per_bar)
         self.num_threads = num_threads
         self.beat_this = BeatThisModel(threads=num_threads)
         self.beat_this_dbn = make_dbn(self.beats_per_bar, threads=num_threads)
         self._madmom_beats: tuple | None = None  # madmom's RNN + DBN, built on first use
-        self.chord_features = CNNChordFeatureProcessor()
+        # madmom's CNNs with a faster convolution (same results to float rounding)
+        self.chord_features = accelerated(CNNChordFeatureProcessor())
         self.chord_crf = CRFChordRecognitionProcessor()
-        self.key = CNNKeyRecognitionProcessor()
+        self.key = accelerated(CNNKeyRecognitionProcessor())
         self._closed = False
 
     @property
