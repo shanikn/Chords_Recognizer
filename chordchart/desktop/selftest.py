@@ -54,6 +54,8 @@ def run(report_path: str) -> int:
     check("deno", _deno)
     check("yt-dlp", _ytdlp)
     check("opencv fast path", _opencv)
+    check("fast convolution (chord and key CNNs)", _fastconv)
+    check("window (pywebview + WebView2)", _window)
     check("analysis with worker processes", _analysis)
     notes_checks = {"notes: torch and Demucs": _demucs, "notes: basic-pitch": _basic_pitch}
     for name, fn in notes_checks.items():
@@ -103,6 +105,30 @@ def _opencv():
     if layers._convolve_opencv is None:
         raise RuntimeError("madmom is not using OpenCV (slow path)")
     return {"cv2": cv2.__version__}
+
+
+def _fastconv():
+    from chordchart.fastconv import FastConvolution, _networks
+    from chordchart.processors import Processors
+
+    with Processors() as procs:
+        counts = {}
+        for name in ("chord_features", "key"):
+            layers = [layer for net in _networks(getattr(procs, name)) for layer in net.layers]
+            if any(type(layer).__name__ == "ConvolutionalLayer" for layer in layers):
+                raise RuntimeError(f"{name}: madmom's slow convolution is still in use")
+            counts[name] = sum(isinstance(layer, FastConvolution) for layer in layers)
+    return counts
+
+
+def _window():
+    """pywebview must import in the bundle. WebView2 may be missing on some PCs: then the
+    app uses the browser, which is fine, so that is reported, not failed."""
+    import webview  # noqa: F401
+
+    from chordchart.desktop import window
+
+    return {"pywebview": True, "webview2": window.webview2_version() or "missing: browser fallback"}
 
 
 def _analysis():
