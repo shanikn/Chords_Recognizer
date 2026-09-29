@@ -27,7 +27,10 @@ def main():
         decode_section(song, wav)
         audio = load_signal(wav)
         recognizer = MadmomCRFRecognizer(procs)
-        for name, fn in (("chords", lambda: recognizer.recognize(audio)), ("key", lambda: detect_key(audio, procs))):
+        for name, fn in (
+            ("chords", lambda: recognizer.recognize(audio)),
+            ("key", lambda: detect_key(audio, procs)),
+        ):
             profile = cProfile.Profile()
             began = time.perf_counter()
             profile.enable()

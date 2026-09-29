@@ -36,7 +36,9 @@ def main():
         options = ort.SessionOptions()
         options.intra_op_num_threads = 4
         options.enable_cpu_mem_arena = False
-        procs.beat_this.session = ort.InferenceSession(str(beat_this.MODEL), options, providers=["CPUExecutionProvider"])
+        procs.beat_this.session = ort.InferenceSession(
+            str(beat_this.MODEL), options, providers=["CPUExecutionProvider"]
+        )
     mem("models loaded")
     with tempfile.TemporaryDirectory() as tmp:
         wav = Path(tmp) / "a.wav"

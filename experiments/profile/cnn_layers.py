@@ -25,7 +25,9 @@ def networks(procs):
     found = []
     for name, proc in (("chords", procs.chord_features), ("key", procs.key)):
         steps = list(proc.processors)
-        i = next(i for i, p in enumerate(steps) if isinstance(p, NeuralNetwork | NeuralNetworkEnsemble))
+        i = next(
+            i for i, p in enumerate(steps) if isinstance(p, NeuralNetwork | NeuralNetworkEnsemble)
+        )
         net = steps[i]
         if isinstance(net, NeuralNetworkEnsemble):
             net = net.processors[0].processors[0]

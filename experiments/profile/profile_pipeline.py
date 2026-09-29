@@ -37,12 +37,16 @@ def emit(kind: str, **data) -> None:
     print(json.dumps({"kind": kind, **data}), flush=True)
 
 
-def worker(song_keys: list[str], notes_key: str | None, madmom_conv: bool = False, dbn_threads=None) -> None:
+def worker(
+    song_keys: list[str], notes_key: str | None, madmom_conv: bool = False, dbn_threads=None
+) -> None:
     if dbn_threads is not None:
         import chordchart.beat_this
 
         make_dbn = chordchart.beat_this.make_dbn
-        chordchart.beat_this.make_dbn = lambda beats_per_bar, threads=1: make_dbn(beats_per_bar, dbn_threads)
+        chordchart.beat_this.make_dbn = lambda beats_per_bar, threads=1: make_dbn(
+            beats_per_bar, dbn_threads
+        )
     if madmom_conv:
         import chordchart.fastconv
 
@@ -103,7 +107,11 @@ def worker(song_keys: list[str], notes_key: str | None, madmom_conv: bool = Fals
         for what, fn in (("MIDI", to_midi), ("MusicXML", to_musicxml)):
             t = time.perf_counter()
             data = fn(result)
-            emit("time", what=f"write {what} ({len(data) // 1024} KB)", seconds=time.perf_counter() - t)
+            emit(
+                "time",
+                what=f"write {what} ({len(data) // 1024} KB)",
+                seconds=time.perf_counter() - t,
+            )
     procs.close()
     emit("done")
 
@@ -167,12 +175,20 @@ def main() -> None:
         peaks[phase[0]] = max(peaks.get(phase[0], 0), tree_rss(ps))
         time.sleep(0.02)
     reader.join(timeout=5)
-    print(json.dumps({"kind": "memory", "peak_mb_by_phase": {k: round(v / 2**20) for k, v in peaks.items()}}))
+    print(
+        json.dumps(
+            {"kind": "memory", "peak_mb_by_phase": {k: round(v / 2**20) for k, v in peaks.items()}}
+        )
+    )
 
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--worker":
-        dbn = int(sys.argv[sys.argv.index("--dbn-threads") + 1]) if "--dbn-threads" in sys.argv else None
+        dbn = (
+            int(sys.argv[sys.argv.index("--dbn-threads") + 1])
+            if "--dbn-threads" in sys.argv
+            else None
+        )
         worker(json.loads(sys.argv[2]), json.loads(sys.argv[3]), "--madmom-conv" in sys.argv, dbn)
     else:
         main()

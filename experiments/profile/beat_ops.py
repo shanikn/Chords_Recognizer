@@ -1,6 +1,6 @@
 """Which onnxruntime ops take Beat This!'s time (one 1500-frame chunk, 4 threads).
 
-    uv run python experiments/profile/beat_ops.py
+uv run python experiments/profile/beat_ops.py
 """
 
 import json
@@ -25,10 +25,14 @@ def main():
         options.intra_op_num_threads = 4
         options.enable_profiling = True
         options.profile_file_prefix = str(Path(tmp) / "prof")
-        session = ort.InferenceSession(str(beat_this.MODEL), options, providers=["CPUExecutionProvider"])
+        session = ort.InferenceSession(
+            str(beat_this.MODEL), options, providers=["CPUExecutionProvider"]
+        )
         inp = session.get_inputs()[0]
         print("input", inp.name, inp.shape, inp.type)
-        chunk = np.random.default_rng(0).standard_normal((1, beat_this.CHUNK, 128)).astype(np.float32)
+        chunk = (
+            np.random.default_rng(0).standard_normal((1, beat_this.CHUNK, 128)).astype(np.float32)
+        )
         for _ in range(3):
             session.run(None, {inp.name: chunk})
         events = json.loads(Path(session.end_profiling()).read_text())

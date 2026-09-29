@@ -1,4 +1,4 @@
-"""The Windows desktop app: double-click -> ChordChart opens in the browser.
+"""The Windows desktop app: double-click -> ChordChart opens in its own window.
 
 Entry point of the packaged ChordChart.exe (PyInstaller, no console window):
 
@@ -7,13 +7,15 @@ Entry point of the packaged ChordChart.exe (PyInstaller, no console window):
    instead of starting a second app.
 2. With no console, stdout/stderr go to a log file in %LOCALAPPDATA%\\ChordChart\\logs.
 3. A newer yt-dlp from the updater is used if one is installed (ytdlp_update.activate).
-4. The server starts on a free local port (127.0.0.1 only) and the default browser
-   opens the page.
-5. It exits when the page's "Quit ChordChart" button is pressed, or when no page has
-   pinged for IDLE_EXIT seconds (and nothing is being analysed). Shutdown stops the
-   server and terminates the beat-tracking workers.
-
-Round 2 (not yet): own window (pywebview), single instance, Windows Job Object.
+4. One app per variant (instance.claim): a second launch brings the running one to
+   the front and exits. The app sits in a kill-on-close Job Object, so its worker
+   processes can't outlive it, even after a crash.
+5. The server starts on a free local port (127.0.0.1 only) and the page opens in the
+   app's own window (window.py: WebView2). The app exits when the window is closed.
+6. Without WebView2 (or with --browser), the default browser opens the page instead;
+   the app then exits when the page's "Quit ChordChart" button is pressed, or when no
+   page has pinged for IDLE_EXIT seconds (and nothing is being analysed).
+Shutdown stops the server and terminates the beat-tracking workers.
 """
 
 from __future__ import annotations
@@ -30,8 +32,8 @@ import webbrowser
 # environment variable is for testing only.
 IDLE_EXIT = int(os.environ.get("CHORDCHART_IDLE_EXIT", 5 * 60))
 FRIENDLY_UPDATE_HINT = (
-    "close ChordChart, wait a few days, and try again; if it keeps failing, ask for an "
-    "updated ChordChart"
+    'press "Update YouTube support" at the bottom of the page, then close and reopen '
+    "ChordChart; if it keeps failing, ask for an updated ChordChart"
 )
 
 
@@ -55,14 +57,32 @@ def main() -> int:
 
         return run(sys.argv[2] if len(sys.argv) >= 3 else "chordchart-selftest.json")
 
-    return _run_app(log_file, open_browser="--no-browser" not in sys.argv)
+    return _run_app(
+        log_file,
+        open_browser="--no-browser" not in sys.argv,
+        allow_window="--browser" not in sys.argv,
+    )
 
 
-def _run_app(log_file, open_browser: bool) -> int:
+def instance_name(notes: bool) -> str:
+    return "ChordChart-Notes" if notes else "ChordChart"
+
+
+def _run_app(log_file, open_browser: bool, allow_window: bool = True) -> int:
     import uvicorn
 
     from chordchart import __version__, bundled
+    from chordchart.desktop import instance
+    from chordchart.desktop import window as app_window
+    from chordchart.notes.available import notes_available
     from chordchart.web import server
+
+    name, data_dir = instance_name(notes_available()), bundled.app_data_dir()
+    if not instance.claim(name):
+        port = instance.show_running(data_dir, name)
+        logging.info("already running (port %s): showed it and exiting", port)
+        return 0
+    instance.kill_children_on_exit()
 
     bundled.UPDATE_HINT = FRIENDLY_UPDATE_HINT
     stop = threading.Event()
@@ -82,6 +102,19 @@ def _run_app(log_file, open_browser: bool) -> int:
         logging.error("the server didn't start; see %s", log_file)
         return 1
     logging.info("ChordChart %s running at %s", __version__, url)
+    instance.record_port(data_dir, name, port)
+
+    if open_browser and allow_window and app_window.available():
+        try:
+            win = app_window.Window(url, "ChordChart", storage=str(data_dir / "webview"))
+            desktop.on_quit, desktop.on_show, desktop.window = win.close, win.show, True
+            win.run()  # until the window closes
+            return _shutdown(web, thread)
+        except Exception:
+            logging.exception("the window failed; using the browser")
+            desktop.on_quit, desktop.window = stop.set, False
+
+    desktop.on_show = lambda: webbrowser.open(url)
     if open_browser:
         webbrowser.open(url)
 
@@ -91,7 +124,10 @@ def _run_app(log_file, open_browser: bool) -> int:
         if idle > IDLE_EXIT and not app.state.is_busy():
             logging.info("no page open for %d s; exiting", idle)
             break
+    return _shutdown(web, thread)
 
+
+def _shutdown(web, thread) -> int:
     logging.info("shutting down")
     web.should_exit = True  # runs the app's shutdown: stops the beat-tracking workers
     thread.join(timeout=30)

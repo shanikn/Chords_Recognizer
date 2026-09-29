@@ -43,9 +43,14 @@ def main():
         print(f"\n{song}")
         for stage in (*STAGES, "total"):
             cells = [best.get((m, song, "first"), {}).get(stage) for m in modes]
-            print(f"  {stage:7}" + "".join(f"{m:>16}: {c:6.2f}" if c is not None else f"{m:>16}:      -" for m, c in zip(modes, cells, strict=True)))  # fmt: skip
+            shown = [f"{c:6.2f}" if c is not None else "     -" for c in cells]
+            print(
+                f"  {stage:7}" + "".join(f"{m:>16}: {c}" for m, c in zip(modes, shown, strict=True))
+            )
         repeat = [best.get((m, song, "repeat"), {}).get("total") for m in modes]
-        print("  repeat " + "".join(f"{m:>16}: {c:6.2f}" for m, c in zip(modes, repeat, strict=True)))
+        print(
+            "  repeat " + "".join(f"{m:>16}: {c:6.2f}" for m, c in zip(modes, repeat, strict=True))
+        )
         peaks = [memory[m].get(f"analyze {song} (models run)") for m in modes]
         print("  peak MB" + "".join(f"{m:>16}: {c:6}" for m, c in zip(modes, peaks, strict=True)))
     for m in modes:

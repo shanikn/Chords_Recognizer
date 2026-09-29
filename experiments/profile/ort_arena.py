@@ -1,6 +1,7 @@
 """Beat This! on onnxruntime: CPU memory arena kept (onnxruntime's default), off, shrunk
 after every run, or shrunk after a song's last chunk (what chordchart.beat_this does).
-Time for one song, peak and retained memory, and whether the logits are identical. Each mode in a fresh process, interleaved, twice.
+Time for one song, peak and retained memory, and whether the logits are identical.
+Each mode in a fresh process, interleaved, twice.
 
     uv run --with psutil python experiments/profile/ort_arena.py
 """
@@ -35,14 +36,18 @@ def worker(mode: str, samples_file: str, out_file: str) -> None:
     if mode == "no-arena":
         options.enable_cpu_mem_arena = False
     model = beat_this.BeatThisModel(threads=4)
-    model.session = ort.InferenceSession(str(beat_this.MODEL), options, providers=["CPUExecutionProvider"])
+    model.session = ort.InferenceSession(
+        str(beat_this.MODEL), options, providers=["CPUExecutionProvider"]
+    )
     if mode != "shrink-last":
         model._release = None  # never shrink after the last chunk
     if mode == "shrink":
         run_options = ort.RunOptions()
         run_options.add_run_config_entry("memory.enable_memory_arena_shrinkage", "cpu:0")
         session_run = model.session.run
-        model.session.run = lambda outputs, feeds, _options=None: session_run(outputs, feeds, run_options)
+        model.session.run = lambda outputs, feeds, _options=None: session_run(
+            outputs, feeds, run_options
+        )
     me = psutil.Process()
     peak = [0]
     done = threading.Event()
@@ -77,8 +82,8 @@ def main() -> None:
         for _ in range(2):
             for mode in MODES:
                 out = Path(tmp) / f"{mode}.npz"
-                result = subprocess.run([sys.executable, __file__, "--worker", mode, str(samples_file), str(out)],
-                                        capture_output=True, text=True, check=True)  # fmt: skip
+                command = [sys.executable, __file__, "--worker", mode, str(samples_file), str(out)]
+                result = subprocess.run(command, capture_output=True, text=True, check=True)
                 rows.append(json.loads(result.stdout.strip().splitlines()[-1]))
                 with np.load(out) as data:  # closes the file (Windows can't delete it open)
                     logits.setdefault(mode, (data["beat"], data["down"]))
@@ -88,8 +93,11 @@ def main() -> None:
         mine = [r for r in rows if r["mode"] == mode]
         first = min(r["times"][0] for r in mine)
         second = min(r["times"][1] for r in mine)
-        print(f"{mode:9} song 1 {first:5.2f} s  song 2 {second:5.2f} s  peak {min(r['peak_mb'] for r in mine)} MB  "
-              f"after {min(r['after_mb'] for r in mine)} MB  identical logits: {same}")  # fmt: skip
+        peak, after = min(r["peak_mb"] for r in mine), min(r["after_mb"] for r in mine)
+        print(
+            f"{mode:9} song 1 {first:5.2f} s  song 2 {second:5.2f} s  peak {peak} MB  "
+            f"after {after} MB  identical logits: {same}"
+        )
 
 
 if __name__ == "__main__":

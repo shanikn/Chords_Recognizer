@@ -161,3 +161,24 @@ def test_real_update_from_pypi(tmp_path):
     assert result.status == "updated"
     assert (tmp_path / "current" / "yt_dlp" / "version.py").exists()
     assert (tmp_path / "current" / "yt_dlp_ejs").is_dir()
+
+
+def test_downloads_trust_the_bundled_certificates(monkeypatch):
+    # A fresh Windows lacks root certificates that browsers fetch on demand; urllib must
+    # get the context that also trusts certifi's bundle (bundled.https_context).
+    import io
+
+    from chordchart import bundled
+    from chordchart.desktop import ytdlp_update
+
+    marker = object()
+    seen = {}
+
+    def urlopen(request, timeout, context):
+        seen["context"] = context
+        return io.BytesIO(b'{"info": {"version": "1"}}')
+
+    monkeypatch.setattr(bundled, "https_context", lambda: marker)
+    monkeypatch.setattr(ytdlp_update.urllib.request, "urlopen", urlopen)
+    assert ytdlp_update._get_json("https://pypi.org/pypi/yt-dlp/json") == {"info": {"version": "1"}}
+    assert seen["context"] is marker

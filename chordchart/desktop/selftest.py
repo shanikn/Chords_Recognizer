@@ -54,6 +54,8 @@ def run(report_path: str) -> int:
     check("deno", _deno)
     check("yt-dlp", _ytdlp)
     check("opencv fast path", _opencv)
+    check("fast convolution (chord and key CNNs)", _fastconv)
+    check("window (pywebview + WebView2)", _window)
     check("analysis with worker processes", _analysis)
     notes_checks = {"notes: torch and Demucs": _demucs, "notes: basic-pitch": _basic_pitch}
     for name, fn in notes_checks.items():
@@ -103,6 +105,51 @@ def _opencv():
     if layers._convolve_opencv is None:
         raise RuntimeError("madmom is not using OpenCV (slow path)")
     return {"cv2": cv2.__version__}
+
+
+def _fastconv():
+    from chordchart.fastconv import FastConvolution, _networks
+    from chordchart.processors import Processors
+
+    with Processors() as procs:
+        counts = {}
+        for name in ("chord_features", "key"):
+            layers = [layer for net in _networks(getattr(procs, name)) for layer in net.layers]
+            if any(type(layer).__name__ == "ConvolutionalLayer" for layer in layers):
+                raise RuntimeError(f"{name}: madmom's slow convolution is still in use")
+            counts[name] = sum(isinstance(layer, FastConvolution) for layer in layers)
+    return counts
+
+
+def _window():
+    """Everything the app's window loads must be in the bundle, in both builds: pywebview,
+    its .NET bridge (pythonnet -> clr_loader -> cffi) and its WinForms/WebView2 backend.
+    Importing `webview` alone loads none of that, so a missing package (lite once shipped
+    without cffi) would only show when the window opens. The WebView2 *runtime* is part of
+    Windows, not the bundle: if a PC lacks it the app uses the browser, so that is
+    reported, not failed."""
+    import importlib
+
+    from chordchart.desktop import window
+
+    modules = ["cffi", "clr_loader", "pythonnet", "webview"]
+    for name in modules:
+        importlib.import_module(name)
+    import clr  # noqa: F401  (starts the .NET runtime, as the window does)
+
+    # The backend the window runs: WinForms, and the Edge WebView2 control's .NET
+    # assemblies from pywebview's lib folder (both load without the WebView2 runtime).
+    importlib.import_module("webview.platforms.winforms")
+    importlib.import_module("webview.platforms.edgechromium")
+    return {
+        "imported": [
+            *modules,
+            "clr",
+            "webview.platforms.winforms",
+            "webview.platforms.edgechromium",
+        ],
+        "webview2 runtime": window.webview2_version() or "missing: the app uses the browser",
+    }
 
 
 def _analysis():

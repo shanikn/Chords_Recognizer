@@ -17,7 +17,9 @@ def _layer(channels, features, size_time, size_freq, seed=0):
 
 
 # Odd and even kernels (the chord CNN's last layer is 9 x 12), one and many channels.
-@pytest.mark.parametrize("shape", [(1, 4, 3, 3), (5, 6, 3, 3), (3, 4, 9, 12), (4, 2, 1, 1), (2, 3, 5, 4)])
+@pytest.mark.parametrize(
+    "shape", [(1, 4, 3, 3), (5, 6, 3, 3), (3, 4, 9, 12), (4, 2, 1, 1), (2, 3, 5, 4)]
+)
 def test_matches_madmom(shape):
     layer = _layer(*shape)
     rng = np.random.default_rng(1)

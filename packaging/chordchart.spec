@@ -39,10 +39,13 @@ hiddenimports = (
     + collect_submodules("yt_dlp_ejs")
     + collect_submodules("uvicorn")
     + ["chordchart.desktop.selftest", "chordchart.pipeline", "chordchart.processors"]
+    # The app's window (pywebview on WebView2, through pythonnet). pyinstaller-hooks-contrib
+    # collects pywebview's WebView2 DLLs and pythonnet's runtime.
+    + ["chordchart.desktop.window", "chordchart.desktop.instance", "webview", "clr"]
 )
 
-# mutagen is GPL and yt-dlp only uses it to tag files; pywebview comes in round 2.
-excludes = ["mutagen", "pytest", "tkinter", "webview", "PyInstaller", "IPython"]
+# mutagen is GPL and yt-dlp only uses it to tag files.
+excludes = ["mutagen", "pytest", "tkinter", "PyInstaller", "IPython"]
 
 if VARIANT.notes:
     import basic_pitch

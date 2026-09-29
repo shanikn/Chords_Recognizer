@@ -63,7 +63,8 @@ def worker(mode: str, song: str, activations_file: str) -> None:
     mb = 2**20
     print(json.dumps({
         "mode": mode, "build_s": round(built - began, 2), "decode_s": round(ended - built, 2),
-        "total_s": round(ended - began, 2), "tree_before_mb": base // mb, "tree_peak_mb": peak[0] // mb,
+        "total_s": round(ended - began, 2), "tree_before_mb": base // mb,
+        "tree_peak_mb": peak[0] // mb,
         "extra_mb": (peak[0] - base) // mb, "beats": beats.tolist(),
     }))  # fmt: skip
 
@@ -91,12 +92,15 @@ def main() -> None:
             results.setdefault(mode, []).append(row)
     beats = {mode: rows[0]["beats"] for mode, rows in results.items()}
     print(f"{song.name}: {len(activations) / 100:.0f} s of audio, {len(beats['pool'])} beats")
-    print("identical beats and downbeats:", beats["pool"] == beats["sequential"]
-          and all(r["beats"] == beats["pool"] for rows in results.values() for r in rows))  # fmt: skip
+    same = all(r["beats"] == beats["pool"] for rows in results.values() for r in rows)
+    print("identical beats and downbeats:", same)
     for mode, rows in results.items():
         for r in rows:
-            print(f"  {mode:10} build {r['build_s']:5.2f} s  decode {r['decode_s']:5.2f} s  "
-                  f"total {r['total_s']:5.2f} s  tree peak {r['tree_peak_mb']} MB (+{r['extra_mb']} MB)")  # fmt: skip
+            print(
+                f"  {mode:10} build {r['build_s']:5.2f} s  decode {r['decode_s']:5.2f} s  "
+                f"total {r['total_s']:5.2f} s  "
+                f"tree peak {r['tree_peak_mb']} MB (+{r['extra_mb']} MB)"
+            )
 
 
 if __name__ == "__main__":
