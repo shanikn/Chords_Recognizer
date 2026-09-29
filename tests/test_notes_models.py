@@ -120,3 +120,21 @@ def test_basic_pitch_finds_the_played_pitches(tmp_path):
         near = [n for n in notes if abs(n.start - onset) < 0.1]
         found.append(max(near, key=lambda n: n.velocity).pitch if near else None)
     assert found == melody
+
+
+def test_separation_is_seeded_and_leaves_the_global_generators_alone():
+    import random
+
+    import torch
+
+    from chordchart.notes.stems import _seeded
+
+    random.seed(123)
+    expected_outer = random.random()
+    random.seed(123)
+    with _seeded(0):
+        first = (random.randint(0, 22050), torch.rand(1).item())
+    with _seeded(0):
+        second = (random.randint(0, 22050), torch.rand(1).item())
+    assert first == second  # Demucs's random shift is the same on every run
+    assert random.random() == expected_outer  # the caller's random state is restored
