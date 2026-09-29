@@ -94,6 +94,12 @@ class BeatThisModel:
         options.inter_op_num_threads = 1
         self.session = ort.InferenceSession(str(path), options, providers=["CPUExecutionProvider"])
         self._lock = threading.Lock()
+        # onnxruntime keeps the memory of its largest run in an arena for reuse: ~1.3 GB
+        # for a 30 s chunk, held for as long as the app runs. The chunks of one song reuse
+        # it; the last chunk's run then hands it back (the arena shrinks after that run).
+        # Same results; no slower than keeping it (experiments/profile/ort_arena.py).
+        self._release = ort.RunOptions()
+        self._release.add_run_config_entry("memory.enable_memory_arena_shrinkage", "cpu:0")
 
     def logits(self, samples44k: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Beat and downbeat logits per frame (FPS) for a mono 44.1 kHz float signal."""
@@ -107,11 +113,12 @@ class BeatThisModel:
         beat = np.full(n, -1000.0, dtype=np.float32)
         down = np.full(n, -1000.0, dtype=np.float32)
         with self._lock:
-            for start in reversed(starts):  # the first chunk wins where chunks overlap
+            for i, start in enumerate(reversed(starts)):  # the first chunk wins where they overlap
                 chunk = spect[max(start, 0) : min(start + CHUNK, n)]
                 pad = ((max(0, -start), max(0, min(BORDER, start + CHUNK - n))), (0, 0))
                 chunk = np.pad(chunk, pad)[None].astype(np.float32)
-                b, d = self.session.run(None, {"spect": chunk})
+                last = i == len(starts) - 1
+                b, d = self.session.run(None, {"spect": chunk}, self._release if last else None)
                 beat[start + BORDER : start + CHUNK - BORDER] = b[0][BORDER:-BORDER]
                 down[start + BORDER : start + CHUNK - BORDER] = d[0][BORDER:-BORDER]
         return beat, down
