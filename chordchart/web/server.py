@@ -5,12 +5,17 @@
                            Spotify sources only) is a YouTube link to use instead of the
                            automatic match, remembered for next time
     GET  /api/jobs/{id}    {"state": running|done|error, "messages", "chart", "song", "error"}
+    POST /api/upload?name=song.mp3   the file's bytes (application/octet-stream) ->
+                           {"path"}: a local copy to analyse, for the page's "Choose file"
     POST /api/notes        {"source", "start", "end", "instrument"} -> {"job_id"}; the job's
                            "notes" is the Transcription, "progress" the stem separation's
     GET  /api/notes/{id}.mid   that job's notes as a MIDI file
     GET  /api/notes/{id}.musicxml   ... as sheet music (MusicXML, piano grand staff)
     GET  /vendor/{file}    bundled JavaScript (the sheet music renderer)
-    GET  /api/app          {"desktop", "version", "notes"}: "notes" false = not installed
+    GET  /api/app          {"desktop", "version", "notes", "window"}: "notes" false = not
+                           installed; "window" true = in the app's own window (no Quit button)
+    POST /api/show         desktop app: bring the window (or a browser tab) to the front
+    POST /api/update-ytdlp desktop app: install the newest yt-dlp ("Update YouTube support")
 
 The page polls the job while it runs. Analyses run one at a time on a worker thread:
 the models already use the whole CPU, so running two at once would only slow both.
@@ -28,6 +33,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import socket
 import sys
 import threading
@@ -93,6 +99,8 @@ class Desktop:
     on_quit: Callable[[], None]
     version: str
     last_seen: float = field(default_factory=time.monotonic)
+    on_show: Callable[[], None] | None = None  # a second launch of the app calls this
+    window: bool = False  # the page is in the app's own window
 
 
 def create_app(
@@ -290,7 +298,9 @@ def create_app(
         if desktop is None:
             return JSONResponse({"desktop": False, "notes": notes})
         desktop.last_seen = time.monotonic()
-        return JSONResponse({"desktop": True, "version": desktop.version, "notes": notes})
+        return JSONResponse(
+            {"desktop": True, "version": desktop.version, "notes": notes, "window": desktop.window}
+        )
 
     if desktop is not None:
 
@@ -322,6 +332,44 @@ def create_app(
                 return _error("send JSON (Content-Type: application/json)", 415)
             threading.Timer(0.3, desktop.on_quit).start()  # let this response go out first
             return JSONResponse({"ok": True})
+
+        @app.post("/api/show")
+        async def show(request: Request) -> JSONResponse:
+            content_type = request.headers.get("content-type", "").split(";")[0].strip()
+            if content_type != "application/json":
+                return _error("send JSON (Content-Type: application/json)", 415)
+            if desktop.on_show is not None:
+                threading.Thread(target=desktop.on_show, daemon=True).start()
+            return JSONResponse({"ok": True})
+
+        @app.post("/api/update-ytdlp")
+        def update_ytdlp(request: Request) -> JSONResponse:
+            # Sync handler (runs in a worker thread): the update downloads and checks
+            # a few MB. JSON-only like the other POSTs.
+            content_type = request.headers.get("content-type", "").split(";")[0].strip()
+            if content_type != "application/json":
+                return _error("send JSON (Content-Type: application/json)", 415)
+            from yt_dlp.version import __version__ as current
+
+            from chordchart.desktop import ytdlp_update
+
+            try:
+                result = ytdlp_update.update(current)
+            except ytdlp_update.UpdateError as exc:
+                return _error(str(exc), 502)
+            return JSONResponse(asdict(result))
+
+    @app.post("/api/upload")
+    async def upload(request: Request, name: str = "audio") -> JSONResponse:
+        # octet-stream, like JSON, can't be sent cross-origin without a preflight.
+        content_type = request.headers.get("content-type", "").split(";")[0].strip()
+        if content_type != "application/octet-stream":
+            return _error("send the file as application/octet-stream", 415)
+        try:
+            path = await _save_upload(request, name, default_cache_dir() / "uploads")
+        except ValueError as exc:
+            return _error(str(exc), 413)
+        return JSONResponse({"path": str(path)})
 
     @app.get("/api/jobs/{job_id}")
     def job_status(job_id: str) -> JSONResponse:
@@ -375,6 +423,46 @@ async def _read_request(request: Request):
     if body.get("video") and not spotify.is_spotify(source):
         return _error("a replacement video can only be given for a Spotify link", 400)
     return source, start, end, body
+
+
+UPLOAD_LIMIT = 1024**3  # bytes; a long WAV is a few hundred MB
+UPLOAD_KEEP = 7 * 24 * 3600  # seconds an uploaded copy is kept
+
+
+async def _save_upload(request: Request, name: str, folder: Path) -> Path:
+    """Stream the upload to <folder>/<content hash>/<name>: the page shows the file's own
+    name as the title, and the same file uploaded twice is stored once. Copies older
+    than UPLOAD_KEEP are deleted (the analysis cache keeps their results)."""
+    import hashlib
+    import re
+    import shutil
+
+    folder.mkdir(parents=True, exist_ok=True)
+    now = time.time()
+    for old in folder.iterdir():
+        if old.is_dir() and now - old.stat().st_mtime > UPLOAD_KEEP:
+            shutil.rmtree(old, ignore_errors=True)
+    safe = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", Path(name).name).strip(" .") or "audio"
+    digest = hashlib.sha256()
+    tmp = folder / f"upload-{uuid.uuid4().hex}.part"
+    size = 0
+    try:
+        with tmp.open("wb") as out:
+            async for chunk in request.stream():
+                size += len(chunk)
+                if size > UPLOAD_LIMIT:
+                    raise ValueError(f"the file is over {UPLOAD_LIMIT // 1024**2} MB")
+                digest.update(chunk)
+                out.write(chunk)
+        if size == 0:
+            raise ValueError("the file is empty")
+        target = folder / digest.hexdigest()[:16] / safe
+        target.parent.mkdir(exist_ok=True)
+        tmp.replace(target)
+        os.utime(target.parent)  # recently used: not pruned
+        return target
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def _use_video(source: str, body: dict, status: Callable) -> None:

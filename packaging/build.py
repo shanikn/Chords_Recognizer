@@ -124,6 +124,9 @@ def make_zip(folder: Path, zip_path: Path, top: str) -> None:
 
 
 def inno_setup(version: str, variant: variants.Variant) -> Path:
+    from chordchart.desktop.app import instance_name
+    from chordchart.desktop.instance import mutex_name
+
     other = next(v for v in variants.VARIANTS.values() if v.key != variant.key)
     iscc = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Inno Setup 6" / "ISCC.exe"
     if not iscc.exists():
@@ -139,6 +142,9 @@ def inno_setup(version: str, variant: variants.Variant) -> Path:
         # The other variant shares the data folder: its uninstall key keeps it safe.
         "OtherAppName": other.app_name,
         "OtherAppKey": other.app_id.replace("{{", "{", 1) + "_is1",
+        # Held while the app runs (desktop/instance.py): Setup and the uninstaller ask
+        # to close it first instead of failing on files in use.
+        "AppMutex": mutex_name(instance_name(variant.notes)),
     }
     args = [f"/D{name}={value}" for name, value in defines.items()]
     subprocess.run([str(iscc), "/Q", *args, str(HERE / "installer.iss")], check=True)

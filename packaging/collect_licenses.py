@@ -26,7 +26,7 @@ VARIANT = variants.current()
 TARGET = HERE / "build" / VARIANT.key / "licenses"
 VENDOR = HERE / "vendor"
 
-EXCLUDED = {"mutagen", "pytest", "pyinstaller", "pywebview", "deno", "lameenc", "sphn"}  # spec
+EXCLUDED = {"mutagen", "pytest", "pyinstaller", "deno", "lameenc", "sphn"}  # spec
 # (the deno *package* only locates the binary; the deno binary gets its own entry below)
 
 
@@ -34,7 +34,8 @@ def runtime_distributions() -> list[metadata.Distribution]:
     excluded = set(EXCLUDED)
     if not VARIANT.notes:
         excluded |= {variants.normal(n) for n in variants.NOTES_ROOTS}
-    seen = variants.reachable(["chordchart"], excluded)
+    # pywebview (the app's window) is a desktop-only dependency, not chordchart's own
+    seen = variants.reachable(["chordchart", "pywebview"], excluded)
     seen.pop("chordchart", None)
     return sorted(seen.values(), key=lambda d: _normal(d.metadata["Name"]))
 

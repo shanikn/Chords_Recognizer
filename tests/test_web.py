@@ -274,7 +274,7 @@ def test_plain_server_is_not_a_desktop_app():
 def test_desktop_quit_button_and_heartbeat():
     quits = []
     client, desktop = _desktop_client(quits)
-    assert client.get("/api/app").json() == {"desktop": True, "version": "1.0.0", "notes": True}
+    assert client.get("/api/app").json() == {"desktop": True, "version": "1.0.0", "notes": True, "window": False}
 
     before = desktop.last_seen
     time.sleep(0.01)
@@ -439,3 +439,72 @@ def test_a_spotify_video_override_is_recorded_before_the_analysis(monkeypatch):
     body = {"source": spotify_link, "video": "https://youtu.be/l7MaKmKJqoc"}
     _wait(client, client.post("/api/analyze", json=body).json()["job_id"])
     assert calls == [("match", spotify_link, "https://youtu.be/l7MaKmKJqoc"), ("analyze", spotify_link)]
+
+
+def test_upload_keeps_the_file_name_and_stores_each_file_once(monkeypatch, tmp_path):
+    monkeypatch.setenv("CHORDCHART_CACHE_DIR", str(tmp_path))
+    client = _client(lambda *a, **k: None)
+    headers = {"Content-Type": "application/octet-stream"}
+    first = client.post("/api/upload?name=My%20Song.mp3", content=b"abc" * 1000, headers=headers)
+    again = client.post("/api/upload?name=My%20Song.mp3", content=b"abc" * 1000, headers=headers)
+    assert first.status_code == 200
+    path = first.json()["path"]
+    assert path == again.json()["path"]
+    assert path.endswith("My Song.mp3") and str(tmp_path / "uploads") in path
+    assert len(list((tmp_path / "uploads").iterdir())) == 1  # no .part left behind
+
+
+def test_upload_names_cannot_escape_the_folder(monkeypatch, tmp_path):
+    monkeypatch.setenv("CHORDCHART_CACHE_DIR", str(tmp_path))
+    client = _client(lambda *a, **k: None)
+    response = client.post(
+        "/api/upload?name=..%5C..%5Cevil.exe", content=b"x", headers={"Content-Type": "application/octet-stream"}
+    )
+    from pathlib import Path
+
+    path = Path(response.json()["path"])
+    assert path.parent.parent == tmp_path / "uploads" and path.name == "evil.exe"
+
+
+@pytest.mark.parametrize(
+    ("content", "headers", "status"),
+    [
+        (b"x", {"Content-Type": "text/plain"}, 415),  # other sites could send this
+        (b"", {"Content-Type": "application/octet-stream"}, 413),
+    ],
+)
+def test_bad_uploads_are_refused(monkeypatch, tmp_path, content, headers, status):
+    monkeypatch.setenv("CHORDCHART_CACHE_DIR", str(tmp_path))
+    client = _client(lambda *a, **k: None)
+    assert client.post("/api/upload?name=a.mp3", content=content, headers=headers).status_code == status
+
+
+def test_a_second_launch_brings_the_app_to_the_front():
+    shown = []
+    client, desktop = _desktop_client([])
+    desktop.on_show = lambda: shown.append(True)
+    assert client.post("/api/show", json={}).status_code == 200
+    deadline = time.monotonic() + 2
+    while not shown and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert shown
+    assert client.post("/api/show", content="x", headers={"Content-Type": "text/plain"}).status_code == 415
+
+
+def test_update_youtube_support(monkeypatch):
+    from chordchart.desktop import ytdlp_update
+
+    client, _ = _desktop_client([])
+    monkeypatch.setattr(
+        ytdlp_update, "update", lambda current: ytdlp_update.UpdateResult("updated", "2099.1.1", True)
+    )
+    body = client.post("/api/update-ytdlp", json={}).json()
+    assert body == {"status": "updated", "version": "2099.1.1", "restart_needed": True}
+
+    def fail(current):
+        raise ytdlp_update.UpdateError("couldn't reach PyPI")
+
+    monkeypatch.setattr(ytdlp_update, "update", fail)
+    response = client.post("/api/update-ytdlp", json={})
+    assert (response.status_code, response.json()["error"]) == (502, "couldn't reach PyPI")
+    assert _client(lambda *a, **k: None).post("/api/update-ytdlp", json={}).status_code == 404

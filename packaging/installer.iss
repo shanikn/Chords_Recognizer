@@ -29,8 +29,13 @@
   #define OtherAppKey "{3F7D1B9E-2C4A-4E8B-A6D5-9B1E7C3F2A48}_is1"
 #endif
 
+#ifndef AppMutex
+  #define AppMutex "Local\ChordChart-single-instance"
+#endif
+
 [Setup]
 AppId={#AppId}
+AppMutex={#AppMutex}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}

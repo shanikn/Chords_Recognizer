@@ -39,6 +39,12 @@
     border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; width: 100%;
   }
   input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .source-row { display: flex; gap: 8px; }
+  .source-row input { flex: 1; min-width: 0; }
+  button.secondary {
+    background: transparent; color: var(--text); border: 1px solid var(--line);
+    font-weight: 500; padding: 10px 14px; white-space: nowrap;
+  }
   button {
     font: inherit; font-weight: 600; padding: 11px 22px; border: 0; border-radius: 8px;
     background: var(--accent); color: var(--accent-text); cursor: pointer;
@@ -134,6 +140,10 @@
   .match a { color: inherit; }
   .override { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
   .override input { flex: 1 1 260px; min-width: 0; }
+  button.linklike {
+    background: none; border: 0; padding: 0; color: inherit; font: inherit; font-weight: 400;
+    text-decoration: underline; cursor: pointer;
+  }
   /* Sheet music is drawn black on white, so it sits on "paper" in both themes. */
   .sheet {
     margin-top: 16px; padding: 12px; border: 1px solid var(--line); border-radius: 8px;
@@ -154,8 +164,12 @@
 
   <form id="form" autocomplete="off">
     <label class="source">Link or file
-      <input id="source" placeholder="YouTube or Spotify track link, or a file path" required>
+      <span class="source-row">
+        <input id="source" placeholder="YouTube or Spotify track link, or a file path" required>
+        <button id="pick" class="secondary" type="button">Choose file…</button>
+      </span>
     </label>
+    <input id="file" type="file" accept="audio/*,video/*,.mp3,.m4a,.wav,.flac,.ogg,.opus,.webm,.mp4,.aac,.wma" hidden>
     <label>Start <input id="start" placeholder="0:00" inputmode="decimal"></label>
     <label>End <input id="end" placeholder="end" inputmode="decimal"></label>
     <button id="go" type="submit">Analyze</button>
@@ -217,7 +231,9 @@
   <div id="timer" class="timer" aria-live="off" hidden></div>
 
   <footer>Runs on this computer only. Chord and key models: madmom (non-commercial use). Beats: Beat This!.
-    <span id="notes-credit" hidden>Notes: Demucs and basic-pitch.</span><span id="version"></span></footer>
+    <span id="notes-credit" hidden>Notes: Demucs and basic-pitch.</span><span id="version"></span>
+    <span id="update-row" hidden> · <button id="update-ytdlp" class="linklike" type="button">Update YouTube support</button>
+      <span id="update-result"></span></span></footer>
 </main>
 
 <script>
@@ -535,9 +551,28 @@ appInfo.then((info) => {
   licenses.target = "_blank";
   licenses.textContent = "Licenses";
   version.append(licenses);
+  // YouTube changes often; a newer yt-dlp usually fixes "download failed".
+  $("update-row").hidden = false;
+  $("update-ytdlp").addEventListener("click", async () => {
+    const button = $("update-ytdlp"), result = $("update-result");
+    button.disabled = true;
+    result.textContent = "checking…";
+    try {
+      const response = await fetch("/api/update-ytdlp", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const body = await response.json();
+      if (!response.ok) result.textContent = `— ${body.error}`;
+      else if (body.status === "up-to-date") result.textContent = `— already up to date (${body.version})`;
+      else result.textContent = `— updated to ${body.version}: close and reopen ChordChart to use it`;
+    } catch (err) {
+      result.textContent = `— couldn't update (${err.message})`;
+    } finally {
+      button.disabled = false;
+    }
+  });
+  setInterval(() => fetch("/api/ping").catch(() => {}), 20000);
+  if (info.window) return;  // its own window: closing it quits
   const quit = $("quit");
   quit.hidden = false;
-  setInterval(() => fetch("/api/ping").catch(() => {}), 20000);
   quit.addEventListener("click", async () => {
     quit.disabled = true;
     try {
@@ -550,6 +585,35 @@ appInfo.then((info) => {
     main.replaceChildren(note);
   });
 })();
+
+// "Choose file…": the browser can't hand over a path, so the file is copied to the
+// local server (never leaves this computer) and analysed from there.
+$("pick").addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", async () => {
+  const file = $("file").files[0];
+  if (!file) return;
+  $("file").value = "";
+  const pick = $("pick");
+  pick.disabled = go.disabled = true;
+  pick.textContent = "Loading…";
+  errorBox.hidden = true;
+  try {
+    const response = await fetch(`/api/upload?name=${encodeURIComponent(file.name)}`, {
+      method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: file,
+    });
+    const body = await response.json();
+    if (!response.ok) { showError(body.error || `HTTP ${response.status}`); return; }
+    $("source").value = body.path;
+  } catch (err) {
+    showError(`couldn't load the file (${err.message})`);
+    return;
+  } finally {
+    pick.disabled = go.disabled = false;
+    pick.textContent = "Choose file…";
+  }
+  matchBox.hidden = true;
+  analyzeSong({}, go, "Analyzing…");  // after re-enabling: it disables the buttons itself
+});
 
 function analyzeSong(extra, button, busyText) {
   chartWrap.hidden = true;
