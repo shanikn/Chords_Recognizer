@@ -1,10 +1,11 @@
 """The models, built once and reused: Beat This! (beats) and madmom's chord and key CNNs.
 
-Building a processor loads its model files from disk. With `num_threads > 1`, madmom
-also starts a `multiprocessing.Pool` inside it: the DBN decodes the 3/4 and 4/4
-hypotheses in parallel (and madmom's own downbeat RNN, if used, runs its ensemble of
-networks in parallel). madmom never closes those pools, so whoever builds a Processors
-must `close()` it:
+Building a processor loads its model files from disk. Beat This!'s DBN decodes the 3/4
+and 4/4 hypotheses one after the other in this process: a worker pool gave identical
+beats but was slower and kept ~0.5 GB per worker (experiments/profile/dbn_pool.py).
+madmom's own downbeat tracker (if selected) still starts `multiprocessing.Pool`s with
+`num_threads > 1`, and madmom never closes those, so whoever builds a Processors must
+`close()` it:
 
     with Processors(num_threads=4) as procs:     # command line: one analysis
         analyze(song, processors=procs)
@@ -33,7 +34,7 @@ class Processors:
         self.beats_per_bar = tuple(beats_per_bar)
         self.num_threads = num_threads
         self.beat_this = BeatThisModel(threads=num_threads)
-        self.beat_this_dbn = make_dbn(self.beats_per_bar, threads=num_threads)
+        self.beat_this_dbn = make_dbn(self.beats_per_bar)  # in-process, see above
         self._madmom_beats: tuple | None = None  # madmom's RNN + DBN, built on first use
         # madmom's CNNs with a faster convolution (same results to float rounding)
         self.chord_features = accelerated(CNNChordFeatureProcessor())
