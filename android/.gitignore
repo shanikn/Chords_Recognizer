@@ -1,1 +1,10 @@
 golden/
+third_party/
+build/
+app/src/main/assets/analysis/beat_this_small0.onnx
+.gradle/
+local.properties
+*.iml
+.idea/
+app/build/
+.cxx/

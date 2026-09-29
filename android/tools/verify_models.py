@@ -21,7 +21,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "experiments"))
 from common import DOWNLOADS  # noqa: E402
 
-MODELS = HERE.parent / "models"
+MODELS = HERE.parent / "app" / "src" / "main" / "assets" / "analysis"
 
 
 def main() -> int:

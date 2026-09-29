@@ -28,7 +28,7 @@ import torch
 from torch import nn
 
 HERE = Path(__file__).resolve().parent
-OUT = HERE.parent / "models"
+OUT = HERE.parent / "app" / "src" / "main" / "assets" / "analysis"
 CHORD_BANDS, KEY_BANDS = 113, 105
 
 

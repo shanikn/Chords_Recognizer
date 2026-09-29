@@ -1,0 +1,44 @@
+{
+  "spectrogram": {
+    "chord": {
+      "sample_rate": 44100,
+      "frame_size": 8192,
+      "hop_size": 4410.0,
+      "fps": 10.0,
+      "bands": 113,
+      "log_mul": 1.0,
+      "log_add": 1.0
+    },
+    "key": {
+      "sample_rate": 44100,
+      "frame_size": 8192,
+      "hop_size": 8820.0,
+      "fps": 5.0,
+      "bands": 105,
+      "log_mul": 1.0,
+      "log_add": 1.0
+    }
+  },
+  "beat_this": {
+    "sample_rate": 22050,
+    "n_fft": 1024,
+    "hop": 441,
+    "n_mels": 128,
+    "fps": 50,
+    "chunk": 1500,
+    "border": 6
+  },
+  "dbn": {
+    "meters": [
+      3,
+      4
+    ],
+    "fps": 50.0,
+    "threshold": 0.05,
+    "correct": true,
+    "observation_lambda": 16.0
+  },
+  "crf": {
+    "fps": 10.0
+  }
+}
