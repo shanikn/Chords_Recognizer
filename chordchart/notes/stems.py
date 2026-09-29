@@ -26,7 +26,8 @@ import shutil
 import subprocess
 import threading
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -43,7 +44,11 @@ MODEL_REPO = "adefossez/HTDemucs-6s"
 MODEL_REVISION = "3c5ee475be622df764938de97e4281a7b07ffa58"
 MODEL_MB = 53
 STEM_RATE = 22_050
-CACHE_VERSION = 1
+# 2: stems come from a seeded separation (SEED), so earlier stems are redone once.
+CACHE_VERSION = 2
+# Demucs (shifts=1) shifts the input by a random 0-0.5 s. A fixed seed makes that shift,
+# and so the stems and notes, the same on every run.
+SEED = 0
 
 Progress = Callable[[float], None]  # fraction done, 0..1
 Status = Callable[..., None]
@@ -155,11 +160,14 @@ def _weights_file(filename: str, status: Status | None) -> str:
         ) from exc
 
 
-def run_demucs(model, mix: np.ndarray, progress: Progress | None = None) -> dict[str, np.ndarray]:
+def run_demucs(
+    model, mix: np.ndarray, progress: Progress | None = None, seed: int = SEED
+) -> dict[str, np.ndarray]:
     """Separate `mix` (2, samples); return each source as mono float32.
 
     The input is normalised the way Demucs's own command line does it (zero mean,
-    unit variance of the mono mix), and the output is scaled back.
+    unit variance of the mono mix), and the output is scaled back. Deterministic: the
+    same `mix` and `seed` give the same stems.
     """
     import torch
     from demucs.apply import apply_model
@@ -175,12 +183,32 @@ def run_demucs(model, mix: np.ndarray, progress: Progress | None = None) -> dict
         if progress and info.get("state") == "end":
             progress(min(1.0, (info["segment_offset"] + segment) / length))
 
-    with torch.no_grad():
+    with torch.no_grad(), _seeded(seed):
         out = apply_model(
             model, ((wav - mean) / std)[None], split=True, overlap=0.25, callback=on_chunk
         )[0]
     out = out * std + mean
     return {name: out[i].mean(0).numpy() for i, name in enumerate(model.sources)}
+
+
+@contextmanager
+def _seeded(seed: int) -> Iterator[None]:
+    """Seed the generators Demucs draws from, and restore them afterwards. Demucs picks
+    its shift with Python's `random` (demucs.apply), not torch; torch is seeded too in
+    case a model version uses it. Separations run one at a time (the server's single
+    worker), so nothing else draws from these meanwhile."""
+    import random
+
+    import torch
+
+    state, torch_state = random.getstate(), torch.random.get_rng_state()
+    random.seed(seed)
+    torch.manual_seed(seed)
+    try:
+        yield
+    finally:
+        random.setstate(state)
+        torch.random.set_rng_state(torch_state)
 
 
 def _cache_key(mix: np.ndarray) -> str:

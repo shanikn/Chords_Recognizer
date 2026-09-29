@@ -1,0 +1,494 @@
+{
+ "date": "2026-09-29",
+ "git": "d0e65f9",
+ "dirty": false,
+ "trackers": [
+  "beat_this_dbn"
+ ],
+ "summary": {
+  "beat_this_dbn": {
+   "chords": {
+    "raw": {
+     "majmin": 0.8756880822412649,
+     "root": 0.880855732484236,
+     "mirex": 0.8546388570256219,
+     "seg": 0.8298878676015979
+    },
+    "beat_sync": {
+     "majmin": 0.8874968980182403,
+     "root": 0.891763376349715,
+     "mirex": 0.8651326400707839,
+     "seg": 0.8424763345048948
+    },
+    "chart": {
+     "majmin": 0.8780465959632389,
+     "root": 0.8843432795014096,
+     "mirex": 0.8556441078222883,
+     "seg": 0.8296637621626597
+    }
+   },
+   "beats": {
+    "beat_f": 0.8222971956777971,
+    "cmlt": 0.8942724781118435,
+    "amlt": 0.8942724781118435,
+    "downbeat_f": 0.8169020582602935,
+    "meter_correct": 10,
+    "octave_songs": []
+   },
+   "songs": 10,
+   "beat_seconds": 74.295
+  }
+ },
+ "songs": {
+  "let-it-be": {
+   "title": "Let It Be",
+   "link": "https://www.youtube.com/watch?v=QDYfEBY9NM4",
+   "duration": 243.330612,
+   "offset": 0.1,
+   "offset_coarse": 0.1,
+   "alignment_strength": 2.1253246810457176,
+   "duration_gap": 1.919384666666673,
+   "trackers": {
+    "beat_this_dbn": {
+     "chords": {
+      "raw": {
+       "majmin": 0.8721179134992686,
+       "root": 0.8721179134992686,
+       "mirex": 0.8738640989050153,
+       "seg": 0.8748485441422609
+      },
+      "beat_sync": {
+       "majmin": 0.876614485853069,
+       "root": 0.876614485853069,
+       "mirex": 0.877372628227997,
+       "seg": 0.8798494662312351
+      },
+      "chart": {
+       "majmin": 0.8893754480090007,
+       "root": 0.8893754480090007,
+       "mirex": 0.8901335903839287,
+       "seg": 0.8913284489146238
+      }
+     },
+     "beats": {
+      "beat_f": 0.36496350364963503,
+      "cmlt": 0.6872727272727273,
+      "amlt": 0.6872727272727273,
+      "downbeat_f": 0.36496350364963503,
+      "meter_ref": 4,
+      "meter_est": 4,
+      "octave": false
+     },
+     "beat_seconds": 10.807,
+     "total_seconds": 11.789395400031935,
+     "bpm": 69.76744186046632
+    }
+   }
+  },
+  "yesterday": {
+   "title": "Yesterday",
+   "link": "https://www.youtube.com/watch?v=NrgmdOz227I",
+   "duration": 127.451429,
+   "offset": -0.07,
+   "offset_coarse": 0.0,
+   "alignment_strength": 2.15240664185506,
+   "duration_gap": 2.567526666666666,
+   "trackers": {
+    "beat_this_dbn": {
+     "chords": {
+      "raw": {
+       "majmin": 0.9095823000263312,
+       "root": 0.8611165198938993,
+       "mirex": 0.8682989168901482,
+       "seg": 0.8260504748010611
+      },
+      "beat_sync": {
+       "majmin": 0.9255479199560228,
+       "root": 0.8756093209549087,
+       "mirex": 0.8796933245335092,
+       "seg": 0.8369452254641925
+      },
+      "chart": {
+       "majmin": 0.8681209350171428,
+       "root": 0.8255478143236092,
+       "mirex": 0.8264757274132011,
+       "seg": 0.7863247798408499
+      }
+     },
+     "beats": {
+      "beat_f": 0.964769647696477,
+      "cmlt": 0.978494623655914,
+      "amlt": 0.978494623655914,
+      "downbeat_f": 0.9462365591397849,
+      "meter_ref": 4,
+      "meter_est": 4,
+      "octave": false
+     },
+     "beat_seconds": 6.661,
+     "total_seconds": 7.380079100024886,
+     "bpm": 96.77419354838695
+    }
+   }
+  },
+  "norwegian-wood": {
+   "title": "Norwegian Wood (This Bird Has Flown)",
+   "link": "https://www.youtube.com/watch?v=Y_V6y1ZCg_8",
+   "duration": 125.44,
+   "offset": -0.08,
+   "offset_coarse": 0.0,
+   "alignment_strength": 2.214244674692714,
+   "duration_gap": 2.132883333333325,
+   "trackers": {
+    "beat_this_dbn": {
+     "chords": {
+      "raw": {
+       "majmin": 0.899956215248075,
+       "root": 0.9012968322284,
+       "mirex": 0.899956215248075,
+       "seg": 0.4604124198032502
+      },
+      "beat_sync": {
+       "majmin": 0.8890422396278872,
+       "root": 0.8899016761120616,
+       "mirex": 0.8890422396278872,
+       "seg": 0.4621731394354148
+      },
+      "chart": {
+       "majmin": 0.8881405608426007,
+       "root": 0.8889999973267751,
+       "mirex": 0.8881405608426007,
+       "seg": 0.4450681084260052
+      }
+     },
+     "beats": {
+      "beat_f": 0.983941605839416,
+      "cmlt": 0.9565217391304348,
+      "amlt": 0.9565217391304348,
+      "downbeat_f": 0.9781659388646288,
+      "meter_ref": 3,
+      "meter_est": 3,
+      "octave": false
+     },
+     "beat_seconds": 6.776,
+     "total_seconds": 7.362807500001509,
+     "bpm": 176.4705882352942
+    }
+   }
+  },
+  "michelle": {
+   "title": "Michelle",
+   "link": "https://www.youtube.com/watch?v=WoBLi5eE-wY",
+   "duration": 162.377143,
+   "offset": -0.06,
+   "offset_coarse": 0.0,
+   "alignment_strength": 2.1458515789301376,
+   "duration_gap": 2.929093333333327,
+   "trackers": {
+    "beat_this_dbn": {
+     "chords": {
+      "raw": {
+       "majmin": 0.8031254776492731,
+       "root": 0.8249078718690835,
+       "mirex": 0.7021663324865188,
+       "seg": 0.852083270095505
+      },
+      "beat_sync": {
+       "majmin": 0.8178885935671419,
+       "root": 0.8364240368622052,
+       "mirex": 0.7139183197673697,
+       "seg": 0.8664652445244176
+      },
+      "chart": {
+       "majmin": 0.8251273294584922,
+       "root": 0.8337535179509648,
+       "mirex": 0.7204688539891309,
+       "seg": 0.8310208737471425
+      }
+     },
+     "beats": {
+      "beat_f": 0.9933554817275748,
+      "cmlt": 0.9867986798679867,
+      "amlt": 0.9867986798679867,
+      "downbeat_f": 0.9933774834437086,
+      "meter_ref": 4,
+      "meter_est": 4,
+      "octave": false
+     },
+     "beat_seconds": 7.945,
+     "total_seconds": 8.804231100017205,
+     "bpm": 115.38461538461627
+    }
+   }
+  },
+  "in-my-life": {
+   "title": "In My Life",
+   "link": "https://www.youtube.com/watch?v=YBcdt6DsLQA",
+   "duration": 147.983673,
+   "offset": -0.07,
+   "offset_coarse": 0.1,
+   "alignment_strength": 1.9474339079952652,
+   "duration_gap": 2.604773333333327,
+   "trackers": {
+    "beat_this_dbn": {
+     "chords": {
+      "raw": {
+       "majmin": 0.8922153302961273,
+       "root": 0.9057860523917993,
+       "mirex": 0.8922153302961273,
+       "seg": 0.8919484943052388
+      },
+      "beat_sync": {
+       "majmin": 0.9099829840546709,
+       "root": 0.9174033644646938,
+       "mirex": 0.9099829840546709,
+       "seg": 0.9065726400911175
+      },
+      "chart": {
+       "majmin": 0.9021624897494318,
+       "root": 0.9129932141230082,
+       "mirex": 0.9021624897494318,
+       "seg": 0.9035267585421425
+      }
+     },
+     "beats": {
+      "beat_f": 0.9722814498933903,
+      "cmlt": 0.9704641350210971,
+      "amlt": 0.9704641350210971,
+      "downbeat_f": 0.9661016949152542,
+      "meter_ref": 4,
+      "meter_est": 4,
+      "octave": false
+     },
+     "beat_seconds": 6.846,
+     "total_seconds": 7.586184700019658,
+     "bpm": 103.44827586206927
+    }
+   }
+  },
+  "a-hard-days-night": {
+   "title": "A Hard Day's Night",
+   "link": "https://www.youtube.com/watch?v=zx2TFk0vh1I",
+   "duration": 152.555102,
+   "offset": 0.01,
+   "offset_coarse": 0.0,
+   "alignment_strength": 2.186811615795026,
+   "duration_gap": 5.485388999999998,
+   "trackers": {
+    "beat_this_dbn": {
+     "chords": {
+      "raw": {
+       "majmin": 0.8820530565819612,
+       "root": 0.8886194510885639,
+       "mirex": 0.8586743037935229,
+       "seg": 0.8040110451369885
+      },
+      "beat_sync": {
+       "majmin": 0.9106481485222306,
+       "root": 0.9178987340587277,
+       "mirex": 0.8865114848797393,
+       "seg": 0.8315883922387601
+      },
+      "chart": {
+       "majmin": 0.9016533788193307,
+       "root": 0.9115330865827096,
+       "mirex": 0.8777551209005131,
+       "seg": 0.8281069485306369
+      }
+     },
+     "beats": {
+      "beat_f": 0.9895366218236173,
+      "cmlt": 0.9792899408284024,
+      "amlt": 0.9792899408284024,
+      "downbeat_f": 0.9940119760479043,
+      "meter_ref": 4,
+      "meter_est": 4,
+      "octave": false
+     },
+     "beat_seconds": 8.129,
+     "total_seconds": 8.920039499993436,
+     "bpm": 136.36363636363706
+    }
+   }
+  },
+  "drive-my-car": {
+   "title": "Drive My Car",
+   "link": "https://www.youtube.com/watch?v=kfSQkZuIx84",
+   "duration": 150.282449,
+   "offset": 0.0,
+   "offset_coarse": 0.1,
+   "alignment_strength": 2.0777703440710606,
+   "duration_gap": 2.7173473333333504,
+   "trackers": {
+    "beat_this_dbn": {
+     "chords": {
+      "raw": {
+       "majmin": 0.8666782757275746,
+       "root": 0.8720738358556455,
+       "mirex": 0.8055570248537005,
+       "seg": 0.8470806752037247
+      },
+      "beat_sync": {
+       "majmin": 0.8924340569561888,
+       "root": 0.8962663293633026,
+       "mirex": 0.8303663215003317,
+       "seg": 0.8734290879376736
+      },
+      "chart": {
+       "majmin": 0.9010263072932583,
+       "root": 0.9095977926032057,
+       "mirex": 0.8354994463801066,
+       "seg": 0.9045512066803973
+      }
+     },
+     "beats": {
+      "beat_f": 0.9808027923211169,
+      "cmlt": 0.9623287671232876,
+      "amlt": 0.9623287671232876,
+      "downbeat_f": 0.9861111111111112,
+      "meter_ref": 4,
+      "meter_est": 4,
+      "octave": false
+     },
+     "beat_seconds": 7.829,
+     "total_seconds": 8.462591300019994,
+     "bpm": 124.99999999999896
+    }
+   }
+  },
+  "cant-buy-me-love": {
+   "title": "Can't Buy Me Love",
+   "link": "https://www.youtube.com/watch?v=TBSpmoA8V78",
+   "duration": 134.948571,
+   "offset": -0.07,
+   "offset_coarse": 0.0,
+   "alignment_strength": 1.9930781201659147,
+   "duration_gap": 1.771205666666674,
+   "trackers": {
+    "beat_this_dbn": {
+     "chords": {
+      "raw": {
+       "majmin": 0.9076479120323557,
+       "root": 0.9312228842264911,
+       "mirex": 0.9076479120323557,
+       "seg": 0.9366898761375125
+      },
+      "beat_sync": {
+       "majmin": 0.9058598104145613,
+       "root": 0.9286162512639043,
+       "mirex": 0.9058598104145613,
+       "seg": 0.9336282381193138
+      },
+      "chart": {
+       "majmin": 0.8928486021233581,
+       "root": 0.9130266809909012,
+       "mirex": 0.8928486021233581,
+       "seg": 0.9180386678463107
+      }
+     },
+     "beats": {
+      "beat_f": 0.9900709219858156,
+      "cmlt": 0.9802816901408451,
+      "amlt": 0.9802816901408451,
+      "downbeat_f": 0.983050847457627,
+      "meter_ref": 4,
+      "meter_est": 4,
+      "octave": false
+     },
+     "beat_seconds": 6.179,
+     "total_seconds": 6.656339399982244,
+     "bpm": 176.47058823529235
+    }
+   }
+  },
+  "babys-in-black": {
+   "title": "Baby's In Black",
+   "link": "https://www.youtube.com/watch?v=TJFpUb7JGYo",
+   "duration": 127.582041,
+   "offset": -0.33,
+   "offset_coarse": -0.2,
+   "alignment_strength": 1.9244064622005712,
+   "duration_gap": 1.9483429999999942,
+   "trackers": {
+    "beat_this_dbn": {
+     "chords": {
+      "raw": {
+       "majmin": 0.8669443141663986,
+       "root": 0.8669443141663986,
+       "mirex": 0.8719709283649208,
+       "seg": 0.8324328059749433
+      },
+      "beat_sync": {
+       "majmin": 0.8980836411821399,
+       "root": 0.8980836411821399,
+       "mirex": 0.8997373032444592,
+       "seg": 0.8703615403148094
+      },
+      "chart": {
+       "majmin": 0.8629485303565695,
+       "root": 0.8629485303565695,
+       "mirex": 0.8646021924188889,
+       "seg": 0.7825729119820111
+      }
+     },
+     "beats": {
+      "beat_f": 0.2230769230769231,
+      "cmlt": 0.5572519083969466,
+      "amlt": 0.5572519083969466,
+      "downbeat_f": 0.17910447761194032,
+      "meter_ref": 4,
+      "meter_est": 4,
+      "octave": false
+     },
+     "beat_seconds": 6.045,
+     "total_seconds": 6.494757800013758,
+     "bpm": 68.18181818181743
+    }
+   }
+  },
+  "nowhere-man": {
+   "title": "Nowhere Man",
+   "link": "https://www.youtube.com/watch?v=8scSwaKbE64",
+   "duration": 164.310204,
+   "offset": -0.1,
+   "offset_coarse": -0.2,
+   "alignment_strength": 1.8694997377970455,
+   "duration_gap": 2.4555613333333213,
+   "trackers": {
+    "beat_this_dbn": {
+     "chords": {
+      "raw": {
+       "majmin": 0.8758526288995678,
+       "root": 0.8965970167793432,
+       "mirex": 0.881961613179115,
+       "seg": 0.8891305917569434
+      },
+      "beat_sync": {
+       "majmin": 0.8721430520485471,
+       "root": 0.8961862914392776,
+       "mirex": 0.8781298566425033,
+       "seg": 0.8856056161928819
+      },
+      "chart": {
+       "majmin": 0.8484700211778134,
+       "root": 0.8878451494664831,
+       "mirex": 0.8544568257717696,
+       "seg": 0.8946421825364517
+      }
+     },
+     "beats": {
+      "beat_f": 0.9887640449438202,
+      "cmlt": 0.9777777777777777,
+      "amlt": 0.9777777777777777,
+      "downbeat_f": 0.9935483870967742,
+      "meter_ref": 4,
+      "meter_est": 4,
+      "octave": false
+     },
+     "beat_seconds": 7.078,
+     "total_seconds": 7.62775889999466,
+     "bpm": 120.0
+    }
+   }
+  }
+ }
+}
