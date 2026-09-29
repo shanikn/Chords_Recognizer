@@ -117,8 +117,12 @@ If YouTube downloads start failing, upgrade yt-dlp:
 
 Windows desktop app
 -------------------
-A self-contained app for people without Python: double-click the icon, the page opens
-in the default browser; "Quit ChordChart" (or ~5 minutes with no page open) exits.
+A self-contained app for people without Python: double-click the icon and ChordChart
+opens in its own window (Microsoft Edge WebView2, part of Windows 10/11); closing the
+window quits. If WebView2 is missing, the page opens in the default browser instead and
+"Quit ChordChart" (or ~5 minutes with no page open) exits. Starting it again while it
+runs brings the open window to the front. "Choose file..." picks a local song;
+"Update YouTube support" (footer) installs the newest yt-dlp when downloads start to fail.
 Everything is bundled: Python, madmom and its models, the Beat This! model and
 onnxruntime, OpenCV, an LGPL ffmpeg, yt-dlp
 and its JavaScript runtime (deno). Licenses: packaging/build/<variant>/licenses after a
@@ -128,7 +132,7 @@ Two variants (packaging/variants.py); both can be installed side by side:
     full  "ChordChart Notes"  chords + notes (torch...)  1.1 GB, zip 430 MB
 The app notices which one it is at startup and shows the Chords/Notes toggle only in
 the full one.
-    uv sync --group desktop                             # PyInstaller (+ pywebview, later)
+    uv sync --group desktop                             # PyInstaller and pywebview
     winget install JRSoftware.InnoSetup                 # for the installer
     uv run python packaging/build.py                    # lite -> packaging/out/ChordChart-*.zip
     uv run python packaging/build.py --variant full     # -> ChordChartNotes-*.zip
@@ -136,6 +140,8 @@ the full one.
     uv run python packaging/sandbox/run_sandbox_test.py zip        # test lite on a clean
     uv run python packaging/sandbox/run_sandbox_test.py installer  # Windows (Sandbox)
 The full build needs several GB of free memory (PyInstaller analyses torch).
+The build stops if the app folder contains this PC's Spotify key or a settings.json /
+spotify.json (packaging/secrets_check.py).
 The packaged app has a headless check: ChordChart.exe --self-test report.json
 (in lite, the notes checks are reported as skipped).
 
