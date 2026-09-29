@@ -122,22 +122,33 @@ def _fastconv():
 
 
 def _window():
-    """pywebview must import in the bundle. WebView2 may be missing on some PCs: then the
-    app uses the browser, which is fine, so that is reported, not failed."""
-    import webview  # noqa: F401
+    """Everything the app's window loads must be in the bundle, in both builds: pywebview,
+    its .NET bridge (pythonnet -> clr_loader -> cffi) and its WinForms/WebView2 backend.
+    Importing `webview` alone loads none of that, so a missing package (lite once shipped
+    without cffi) would only show when the window opens. The WebView2 *runtime* is part of
+    Windows, not the bundle: if a PC lacks it the app uses the browser, so that is
+    reported, not failed."""
+    import importlib
 
     from chordchart.desktop import window
 
-    version = window.webview2_version()
-    if version:
-        # Start .NET the way the window does (pythonnet -> clr_loader -> cffi): importing
-        # webview alone doesn't, so a missing piece would only show when the window opens.
-        import clr  # noqa: F401
+    modules = ["cffi", "clr_loader", "pythonnet", "webview"]
+    for name in modules:
+        importlib.import_module(name)
+    import clr  # noqa: F401  (starts the .NET runtime, as the window does)
 
+    # The backend the window runs: WinForms, and the Edge WebView2 control's .NET
+    # assemblies from pywebview's lib folder (both load without the WebView2 runtime).
+    importlib.import_module("webview.platforms.winforms")
+    importlib.import_module("webview.platforms.edgechromium")
     return {
-        "pywebview": True,
-        "webview2": version or "missing: browser fallback",
-        ".NET": bool(version),
+        "imported": [
+            *modules,
+            "clr",
+            "webview.platforms.winforms",
+            "webview.platforms.edgechromium",
+        ],
+        "webview2 runtime": window.webview2_version() or "missing: the app uses the browser",
     }
 
 

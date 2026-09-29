@@ -10,7 +10,9 @@ Steps:
    checked against its SHA-256; ffmpeg.exe is extracted from it.
 2. Licenses of every bundled component (collect_licenses.py), then PyInstaller
    (packaging/chordchart.spec) -> packaging/dist/<app name>/.
-3. secrets_check.py: the folder must not hold this PC's Spotify key or per-user files
+3. The built app's own self-test (ChordChart.exe --self-test): every bundled piece
+   loads and a short analysis gives the expected chords; a failure stops the build.
+   secrets_check.py: the folder must not hold this PC's Spotify key or per-user files
    (settings.json, caches). Then zip it ->
    packaging/out/<ChordChart|ChordChartNotes>-<version>-win64.zip.
 4. With --installer: Inno Setup (packaging/installer.iss) ->
@@ -23,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -69,6 +72,7 @@ def main() -> int:
     subprocess.run([sys.executable, str(HERE / "collect_licenses.py")], check=True)
     pyinstaller(variant)
     folder = HERE / "dist" / variant.app_name
+    self_test(folder)
     secrets_check.check(folder)  # before anything is packed from it
     zip_path = OUT / f"{variant.file_stem}-{__version__}-win64.zip"
     make_zip(folder, zip_path, variant.app_name)
@@ -125,6 +129,28 @@ def pyinstaller(variant: variants.Variant) -> None:
         check=True,
         cwd=ROOT,
     )
+
+
+def self_test(folder: Path) -> None:
+    """Run the built app's self-test; stop the build if any check fails. It loads what
+    the app loads at run time (ffmpeg, deno, yt-dlp, the models, the window's .NET
+    runtime and WebView2 backend, and in the full app torch and basic-pitch), so a package
+    PyInstaller left out fails here instead of on someone's PC."""
+    report_path = HERE / "build" / f"selftest-{folder.name.replace(' ', '-')}.json"
+    report_path.unlink(missing_ok=True)
+    subprocess.run([str(folder / "ChordChart.exe"), "--self-test", str(report_path)], timeout=900)
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raise SystemExit(f"the built app's self-test wrote no report ({report_path})") from None
+    failed = {name: c for name, c in report["checks"].items() if not c["ok"]}
+    for name, check in failed.items():
+        print(f"self-test FAILED: {name}: {check['detail']}\n{check.get('traceback', '')}")
+    if failed:
+        raise SystemExit(
+            f"the built app failed its self-test ({', '.join(failed)}); see {report_path}"
+        )
+    print(f"self-test: OK ({len(report['checks'])} checks)")
 
 
 def make_zip(folder: Path, zip_path: Path, top: str) -> None:
