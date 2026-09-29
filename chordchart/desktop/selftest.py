@@ -128,7 +128,17 @@ def _window():
 
     from chordchart.desktop import window
 
-    return {"pywebview": True, "webview2": window.webview2_version() or "missing: browser fallback"}
+    version = window.webview2_version()
+    if version:
+        # Start .NET the way the window does (pythonnet -> clr_loader -> cffi): importing
+        # webview alone doesn't, so a missing piece would only show when the window opens.
+        import clr  # noqa: F401
+
+    return {
+        "pywebview": True,
+        "webview2": version or "missing: browser fallback",
+        ".NET": bool(version),
+    }
 
 
 def _analysis():

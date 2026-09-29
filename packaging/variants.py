@@ -24,6 +24,8 @@ from packaging.requirements import Requirement
 
 # onnxruntime isn't one: the default beat tracker (Beat This!) runs on it in both builds.
 NOTES_ROOTS = ("demucs", "basic-pitch")
+# Bundled in both apps besides chordchart itself: the desktop dependency group's window.
+APP_ROOTS = ("pywebview",)
 ENV = "CHORDCHART_VARIANT"  # how build.py tells the spec which variant to build
 
 
@@ -99,9 +101,12 @@ def reachable(roots, excluded) -> dict[str, metadata.Distribution]:
 
 
 def notes_only(excluded=frozenset()) -> set[str]:
-    """Normalized names of the distributions only the notes feature pulls in."""
-    everything = reachable(["chordchart"], set(excluded))
-    without_notes = reachable(["chordchart"], set(excluded) | {normal(n) for n in NOTES_ROOTS})
+    """Normalized names of the distributions only the notes feature pulls in. Both apps
+    also bundle APP_ROOTS (the desktop window), so what those need is never notes-only:
+    pythonnet needs cffi, which demucs' soundfile needs too."""
+    roots = ["chordchart", *APP_ROOTS]
+    everything = reachable(roots, set(excluded))
+    without_notes = reachable(roots, set(excluded) | {normal(n) for n in NOTES_ROOTS})
     return set(everything) - set(without_notes)
 
 

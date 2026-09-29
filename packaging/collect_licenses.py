@@ -35,7 +35,7 @@ def runtime_distributions() -> list[metadata.Distribution]:
     if not VARIANT.notes:
         excluded |= {variants.normal(n) for n in variants.NOTES_ROOTS}
     # pywebview (the app's window) is a desktop-only dependency, not chordchart's own
-    seen = variants.reachable(["chordchart", "pywebview"], excluded)
+    seen = variants.reachable(["chordchart", *variants.APP_ROOTS], excluded)
     seen.pop("chordchart", None)
     return sorted(seen.values(), key=lambda d: _normal(d.metadata["Name"]))
 

@@ -81,3 +81,12 @@ def test_each_variant_has_its_own_log_file(key):
     variant = variants.VARIANTS[key]
     assert log_name(notes=variant.notes) == variant.log_file
     assert len({v.log_file for v in variants.VARIANTS.values()}) == len(variants.VARIANTS)
+
+
+def test_what_the_window_needs_is_in_both_apps():
+    # pythonnet (pywebview's .NET bridge) needs cffi. When cffi was counted notes-only
+    # (demucs needs it too), lite shipped without it and its window failed to start
+    # (found by the Windows Sandbox test; the browser fallback kept the app working).
+    assert {"cffi", "pycparser", "pythonnet", "clr-loader", "pywebview"}.isdisjoint(
+        variants.notes_only()
+    )
