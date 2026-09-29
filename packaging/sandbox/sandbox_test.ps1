@@ -37,7 +37,8 @@ try {
         }
         $lite = Join-Path $env:LOCALAPPDATA "Programs\ChordChart\ChordChart.exe"
         $full = Join-Path $env:LOCALAPPDATA "Programs\ChordChart Notes\ChordChart.exe"
-        Say "both installed: lite $(Test-Path $lite), notes $(Test-Path $full)"
+        $liteInstalled, $fullInstalled = (Test-Path $lite), (Test-Path $full)  # before uninstalling
+        Say "both installed: lite $liteInstalled, notes $fullInstalled"
         Say "self-test of each (creates the shared data folder)"
         Start-Process $lite -ArgumentList "--self-test", "$out\selftest-lite.json" -Wait
         Start-Process $full -ArgumentList "--self-test", "$out\selftest-full.json" -Wait
@@ -52,7 +53,7 @@ try {
         Start-Sleep 5
         $keptAfterSecond = Test-Path (Join-Path $data "marker")
         $reason2 = [bool](Select-String -Path "$out\uninstall-lite.txt" -Pattern "Shared data kept \(silent uninstall\)" -Quiet)
-        "lite=$(Test-Path $lite) notes=$(Test-Path $full) kept_after_notes_uninstall=$keptAfterFirst reason1=$reason1 kept_after_lite_uninstall=$keptAfterSecond reason2=$reason2" | Set-Content (Join-Path $out "both.txt")
+        "lite=$liteInstalled notes=$fullInstalled kept_after_notes_uninstall=$keptAfterFirst reason1=$reason1 kept_after_lite_uninstall=$keptAfterSecond reason2=$reason2" | Set-Content (Join-Path $out "both.txt")
         Say "shared data kept after uninstalling Notes: $keptAfterFirst ($reason1); after lite (silent): $keptAfterSecond ($reason2)"
         return
     }
