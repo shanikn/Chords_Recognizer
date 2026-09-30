@@ -8,6 +8,8 @@ stops):
 - pocketfft (C++ header-only; the FFT numpy and scipy use), BSD-3-Clause
 - libsoxr, the fork and commit python-soxr 1.1.0 bundles (dofuuz/soxr a66f3ee), so the
   Beat This! frontend resamples exactly like the Python pipeline. LGPL-2.1.
+- libopus 1.5, the release Android 15 uses (external/libopus), built fixed-point as AOSP
+  builds it, so Opus decodes in-process exactly as Android's own decoder does. BSD-3-Clause.
 - ONNX Runtime 1.30.0 (the Python pipeline's version): the Windows x64 build for the core's
   PC tests, and the Android package (AAR: headers and libonnxruntime.so per ABI). MIT.
 
@@ -33,6 +35,7 @@ DOWNLOADS = THIRD_PARTY / "downloads"
 POCKETFFT_COMMIT = "c90e55b3d529f8efa40ed01a20de22405f45fc65"
 SOXR_COMMIT = "a66f3eeeeb62a32403ff143b756eed92b1ec6b62"
 ORT_VERSION = "1.30.0"
+OPUS_VERSION = "1.5"
 
 DEPS = {
     "pocketfft_hdronly.h": (
@@ -40,6 +43,7 @@ DEPS = {
         "",
     ),
     "soxr.tar.gz": (f"https://codeload.github.com/dofuuz/soxr/tar.gz/{SOXR_COMMIT}", ""),
+    "opus.tar.gz": (f"https://downloads.xiph.org/releases/opus/opus-{OPUS_VERSION}.tar.gz", ""),
     "onnxruntime-win-x64.zip": (
         f"https://github.com/microsoft/onnxruntime/releases/download/v{ORT_VERSION}/"
         f"onnxruntime-win-x64-{ORT_VERSION}.zip",
@@ -98,6 +102,13 @@ def main() -> int:
             top = archive.getnames()[0].split("/")[0]
             archive.extractall(THIRD_PARTY, filter="data")
         (THIRD_PARTY / top).rename(soxr_dir)
+
+    opus_dir = THIRD_PARTY / "opus"
+    if not opus_dir.exists():
+        with tarfile.open(paths["opus.tar.gz"]) as archive:
+            top = archive.getnames()[0].split("/")[0]
+            archive.extractall(THIRD_PARTY, filter="data")
+        (THIRD_PARTY / top).rename(opus_dir)
 
     ort_win = THIRD_PARTY / "onnxruntime-win-x64"
     if not ort_win.exists():

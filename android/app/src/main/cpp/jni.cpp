@@ -3,6 +3,7 @@
 
 #include <jni.h>
 
+#include <cstring>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -10,6 +11,8 @@
 
 #include "chordchart/analyzer.hpp"
 #include "chordchart/audio.hpp"
+#include "chordchart/decode.hpp"
+#include "chordchart/demux.hpp"
 
 using namespace chordchart;
 
@@ -117,6 +120,82 @@ JNIEXPORT jshortArray JNICALL Java_io_github_shanikn_chordchart_Native_finish(JN
 
 JNIEXPORT void JNICALL Java_io_github_shanikn_chordchart_Native_releaseResampler(JNIEnv*, jclass, jlong handle) {
     delete reinterpret_cast<MonoResampler*>(handle);
+}
+
+// Whole-file in-process decoding (WebM/Ogg Opus): null if the core can't handle the file,
+// so the caller falls back to MediaCodec. `listener` gets onProgress("decoding", fraction).
+JNIEXPORT jshortArray JNICALL Java_io_github_shanikn_chordchart_Native_decodeFile(JNIEnv* env, jclass, jstring path, jobject listener) {
+    jmethodID on_progress = nullptr;
+    if (listener) on_progress = env->GetMethodID(env->GetObjectClass(listener), "onProgress", "(Ljava/lang/String;D)V");
+    jstring stage = env->NewStringUTF("decoding");
+    try {
+        auto pcm = decode_file(to_string(env, path), [&](double f) {
+            if (on_progress) env->CallVoidMethod(listener, on_progress, stage, f);
+        });
+        jshortArray out = env->NewShortArray(static_cast<jsize>(pcm.size()));
+        if (out) env->SetShortArrayRegion(out, 0, static_cast<jsize>(pcm.size()), reinterpret_cast<const jshort*>(pcm.data()));
+        return out;
+    } catch (const UnsupportedContainer&) {
+        return nullptr;
+    } catch (const std::exception& e) {
+        throw_java(env, "java/io/IOException", e.what());
+        return nullptr;
+    }
+}
+
+// In-process container reading (WebM/Ogg with Opus): 0 if the file isn't one of those,
+// so the caller falls back to MediaExtractor.
+JNIEXPORT jlong JNICALL Java_io_github_shanikn_chordchart_Native_openDemuxer(JNIEnv* env, jclass, jstring path) {
+    try {
+        return reinterpret_cast<jlong>(Demuxer::open(to_string(env, path)).release());
+    } catch (const UnsupportedContainer&) {
+        return 0;
+    } catch (const std::exception& e) {
+        throw_java(env, "java/io/IOException", e.what());
+        return 0;
+    }
+}
+
+// [sample rate, channels], and the mime type and csd buffers through the other calls
+JNIEXPORT jintArray JNICALL Java_io_github_shanikn_chordchart_Native_demuxerFormat(JNIEnv* env, jclass, jlong handle) {
+    const auto& t = reinterpret_cast<Demuxer*>(handle)->track();
+    const jint values[3] = {t.sample_rate, t.channels, static_cast<jint>(t.csd.size())};
+    jintArray out = env->NewIntArray(3);
+    env->SetIntArrayRegion(out, 0, 3, values);
+    return out;
+}
+
+JNIEXPORT jstring JNICALL Java_io_github_shanikn_chordchart_Native_demuxerMime(JNIEnv* env, jclass, jlong handle) {
+    return env->NewStringUTF(reinterpret_cast<Demuxer*>(handle)->track().mime.c_str());
+}
+
+JNIEXPORT jbyteArray JNICALL Java_io_github_shanikn_chordchart_Native_demuxerCsd(JNIEnv* env, jclass, jlong handle, jint index) {
+    const auto& csd = reinterpret_cast<Demuxer*>(handle)->track().csd.at(static_cast<size_t>(index));
+    jbyteArray out = env->NewByteArray(static_cast<jsize>(csd.size()));
+    env->SetByteArrayRegion(out, 0, static_cast<jsize>(csd.size()), reinterpret_cast<const jbyte*>(csd.data()));
+    return out;
+}
+
+// Writes the next packet into `buffer` (a codec input buffer); returns its size, or -1 at
+// the end. time_out[0] = presentation time (us), time_out[1] = bytes read, [2] = file size.
+JNIEXPORT jint JNICALL Java_io_github_shanikn_chordchart_Native_demuxerNext(JNIEnv* env, jclass, jlong handle, jobject buffer,
+                                                                          jlongArray time_out) {
+    return guarded(env, [&]() -> jint {
+        auto* demuxer = reinterpret_cast<Demuxer*>(handle);
+        Packet packet;
+        if (!demuxer->next(packet)) return -1;
+        auto* dst = static_cast<uint8_t*>(env->GetDirectBufferAddress(buffer));
+        const jlong capacity = env->GetDirectBufferCapacity(buffer);
+        if (!dst || static_cast<jlong>(packet.data.size()) > capacity) throw std::runtime_error("packet larger than the input buffer");
+        std::memcpy(dst, packet.data.data(), packet.data.size());
+        const jlong info[3] = {packet.time_us, static_cast<jlong>(demuxer->position()), static_cast<jlong>(demuxer->size())};
+        env->SetLongArrayRegion(time_out, 0, 3, info);
+        return static_cast<jint>(packet.data.size());
+    });
+}
+
+JNIEXPORT void JNICALL Java_io_github_shanikn_chordchart_Native_releaseDemuxer(JNIEnv*, jclass, jlong handle) {
+    delete reinterpret_cast<Demuxer*>(handle);
 }
 
 }  // extern "C"

@@ -23,4 +23,14 @@ internal object Native {
     @JvmStatic external fun feed(handle: Long, buffer: ByteBuffer, offset: Int, bytes: Int, isFloat: Boolean)
     @JvmStatic external fun finish(handle: Long): ShortArray
     @JvmStatic external fun releaseResampler(handle: Long)
+
+    /** Decodes WebM/Ogg Opus entirely in-process; null for other files. */
+    @JvmStatic external fun decodeFile(path: String, listener: ProgressListener?): ShortArray?
+
+    @JvmStatic external fun openDemuxer(path: String): Long
+    @JvmStatic external fun demuxerFormat(handle: Long): IntArray
+    @JvmStatic external fun demuxerMime(handle: Long): String
+    @JvmStatic external fun demuxerCsd(handle: Long, index: Int): ByteArray
+    @JvmStatic external fun demuxerNext(handle: Long, buffer: ByteBuffer, info: LongArray): Int
+    @JvmStatic external fun releaseDemuxer(handle: Long)
 }

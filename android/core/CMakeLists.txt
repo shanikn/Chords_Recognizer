@@ -33,6 +33,23 @@ else()
   set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 endif()
 add_subdirectory(${THIRD_PARTY}/soxr ${CMAKE_BINARY_DIR}/soxr EXCLUDE_FROM_ALL)
+
+# libopus 1.5, fixed-point as AOSP builds it (external/libopus: -DFIXED_POINT), so Opus
+# decodes in-process exactly as Android's own decoder. Static: BSD-3-Clause.
+set(OPUS_FIXED_POINT ON CACHE BOOL "" FORCE)
+# Plain C: 1.5's CMake enables fixed-point NEON code it doesn't build on arm64. Fixed-point
+# libopus is integer arithmetic and its SIMD paths are bit-exact with the C, so the output
+# is the same; decoding Opus costs little either way.
+set(OPUS_DISABLE_INTRINSICS ON CACHE BOOL "" FORCE)
+set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+set(OPUS_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(OPUS_BUILD_SHARED_LIBRARY OFF CACHE BOOL "" FORCE)
+set(OPUS_INSTALL_PKG_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+set(OPUS_INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+set(_shared ${BUILD_SHARED_LIBS})
+set(BUILD_SHARED_LIBS OFF)
+add_subdirectory(${THIRD_PARTY}/opus ${CMAKE_BINARY_DIR}/opus EXCLUDE_FROM_ALL)
+set(BUILD_SHARED_LIBS ${_shared})
 # soxr's own install/export rules want a relative prefix; not needed here.
 
 add_library(chordchart_core STATIC
@@ -48,6 +65,8 @@ add_library(chordchart_core STATIC
   src/chart.cpp
   src/analyzer.cpp
   src/audio.cpp
+  src/demux.cpp
+  src/decode.cpp
 )
 target_include_directories(chordchart_core
   PUBLIC include
@@ -55,7 +74,7 @@ target_include_directories(chordchart_core
 # third-party headers: SYSTEM, so their warnings don't bury ours
 target_include_directories(chordchart_core SYSTEM
   PRIVATE ${THIRD_PARTY}/pocketfft ${THIRD_PARTY}/soxr/src ${CHORDCHART_ORT_INCLUDE})
-target_link_libraries(chordchart_core PUBLIC soxr ${CHORDCHART_ORT_LIBRARY})
+target_link_libraries(chordchart_core PUBLIC soxr opus ${CHORDCHART_ORT_LIBRARY})
 if(MSVC)
   target_compile_options(chordchart_core PRIVATE /W4 /permissive- /utf-8 /fp:precise)
 else()

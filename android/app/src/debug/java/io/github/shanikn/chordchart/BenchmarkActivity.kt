@@ -32,6 +32,20 @@ class BenchmarkActivity : Activity() {
                 .put("threads", threads)
                 .put("device", "${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}, ${Build.SUPPORTED_ABIS.first()}")
             try {
+                if (intent.getBooleanExtra("extract_only", false)) {
+                    // time MediaExtractor alone: every packet read, nothing decoded
+                    val e = android.media.MediaExtractor()
+                    java.io.FileInputStream(file).use { input -> e.setDataSource(input.fd) }
+                    e.selectTrack(0)
+                    val buffer = java.nio.ByteBuffer.allocateDirect(1 shl 20)
+                    val s0 = System.nanoTime()
+                    var packets = 0
+                    while (e.readSampleData(buffer, 0) >= 0) { packets++; e.advance() }
+                    result.put("extract_s", (System.nanoTime() - s0) / 1e9).put("packets", packets)
+                    e.release()
+                }
+                AudioDecoder.forceExtractor = intent.getBooleanExtra("extractor", false)
+                AudioDecoder.forceMediaCodec = intent.getBooleanExtra("mediacodec", false)
                 val t0 = System.nanoTime()
                 val analyzer = ChordAnalyzer(this, threads, xnnpack)
                 val t1 = System.nanoTime()
@@ -44,6 +58,7 @@ class BenchmarkActivity : Activity() {
                     .put("decode_s", (t2 - t1) / 1e9)
                     .put("analyze_s", (t3 - t2) / 1e9)
                     .put("samples", pcm.size)
+                    .put("pcm_sha256", sha256(pcm))
                     .put("decoder", JSONObject(AudioDecoder.lastStats))
                     .put("song", JSONObject(song))
             } catch (e: Throwable) {
@@ -54,6 +69,12 @@ class BenchmarkActivity : Activity() {
             out.writeText(result.toString(1))
             runOnUiThread { finish() }
         }
+    }
+
+    private fun sha256(pcm: ShortArray): String {
+        val bytes = java.nio.ByteBuffer.allocate(pcm.size * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        bytes.asShortBuffer().put(pcm)
+        return java.security.MessageDigest.getInstance("SHA-256").digest(bytes.array()).joinToString("") { "%02x".format(it) }
     }
 
     /** Peak and current resident memory of this process (kB), from /proc/self/status. */
