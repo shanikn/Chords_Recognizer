@@ -1,26 +1,51 @@
 package io.github.shanikn.chordchart
 
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-/** Phase 1 placeholder; the real screens (pick/share a file, progress, chart) are phase 2. */
 class MainActivity : ComponentActivity() {
+    private val model: AppViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        // a song shared or opened from another app (not again after a rotation)
+        if (savedInstanceState == null) handle(intent)
         setContent {
-            MaterialTheme {
-                Surface(Modifier.fillMaxSize()) {
-                    Text("ChordChart: the analysis core is running on this phone. The app comes next.", Modifier.padding(24.dp))
+            ChordChartTheme {
+                val screen by model.screen.collectAsStateWithLifecycle()
+                val entries by model.entries.collectAsStateWithLifecycle()
+                val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                    uri?.let(model::open)
                 }
+                App(screen, entries, onPick = { picker.launch(arrayOf("audio/*", "video/*")) }, model = model)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handle(intent)
+    }
+
+    private fun handle(intent: Intent?) {
+        val uri: Uri? = when (intent?.action) {
+            Intent.ACTION_SEND ->
+                if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                else @Suppress("DEPRECATION") intent.getParcelableExtra(Intent.EXTRA_STREAM)
+            Intent.ACTION_VIEW -> intent.data
+            else -> null
+        }
+        uri?.let(model::open)
     }
 }

@@ -18,5 +18,7 @@ namespace chordchart {
 
 // Throws UnsupportedContainer (demux.hpp) if the file isn't WebM/Ogg with Opus.
 std::vector<int16_t> decode_file(const std::string& path, const std::function<void(double)>& progress = {});
+// The same, from the whole file's bytes.
+std::vector<int16_t> decode_file(std::vector<uint8_t> data, const std::function<void(double)>& progress = {});
 
 }  // namespace chordchart

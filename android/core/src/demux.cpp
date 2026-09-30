@@ -373,8 +373,9 @@ private:
 
 }  // namespace
 
-std::unique_ptr<Demuxer> Demuxer::open(const std::string& path) {
-    std::vector<uint8_t> data = read_file(path);
+std::unique_ptr<Demuxer> Demuxer::open(const std::string& path) { return open(read_file(path)); }
+
+std::unique_ptr<Demuxer> Demuxer::open(std::vector<uint8_t> data) {
     if (data.size() >= 4 && data[0] == 0x1A && data[1] == 0x45 && data[2] == 0xDF && data[3] == 0xA3)
         return std::make_unique<MatroskaDemuxer>(std::move(data));
     if (data.size() >= 4 && std::memcmp(data.data(), "OggS", 4) == 0) return std::make_unique<OggDemuxer>(std::move(data));

@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <functional>
 #include <vector>
 
 #include "npy.hpp"
@@ -16,6 +17,8 @@ struct Logits {
     std::vector<float> beat, down;  // per frame at Tables::bt_fps
 };
 
-Logits beat_this_logits(const Array<float>& mel, const OnnxModel& model, const Tables& tables);
+// on_chunk(fraction done), after each chunk; returning false stops (throws Cancelled)
+Logits beat_this_logits(const Array<float>& mel, const OnnxModel& model, const Tables& tables,
+                        const std::function<bool(double)>& on_chunk = {});
 
 }  // namespace chordchart

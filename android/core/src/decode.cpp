@@ -58,8 +58,21 @@ int64_t read_int64_le(const std::vector<uint8_t>& b) {
 
 }  // namespace
 
+namespace {
+std::vector<int16_t> decode(std::unique_ptr<Demuxer> demuxer, const std::function<void(double)>& progress);
+}
+
 std::vector<int16_t> decode_file(const std::string& path, const std::function<void(double)>& progress) {
-    auto demuxer = Demuxer::open(path);
+    return decode(Demuxer::open(path), progress);
+}
+
+std::vector<int16_t> decode_file(std::vector<uint8_t> data, const std::function<void(double)>& progress) {
+    return decode(Demuxer::open(std::move(data)), progress);
+}
+
+namespace {
+
+std::vector<int16_t> decode(std::unique_ptr<Demuxer> demuxer, const std::function<void(double)>& progress) {
     const AudioTrack& track = demuxer->track();
     if (track.mime != "audio/opus" || track.csd.size() < 3) throw UnsupportedContainer("not Opus");
 
@@ -117,5 +130,7 @@ std::vector<int16_t> decode_file(const std::string& path, const std::function<vo
     if (progress) progress(1.0);
     return pcm;
 }
+
+}  // namespace
 
 }  // namespace chordchart

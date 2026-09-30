@@ -50,6 +50,8 @@ public:
 
     // Opens `path` (UTF-8); throws UnsupportedContainer if it isn't a supported format.
     static std::unique_ptr<Demuxer> open(const std::string& path);
+    // The same, from the whole file's bytes (e.g. read by the app from a file descriptor).
+    static std::unique_ptr<Demuxer> open(std::vector<uint8_t> data);
 
 protected:
     AudioTrack track_;

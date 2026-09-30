@@ -15,7 +15,7 @@ Reported per song and in total:
 - time (decode, analysis) and peak memory (VmHWM) per song;
 - the Beatles evaluation (evaluate/) scored on the phone's results vs Python's.
 
-Results: android/build/emulator/<mode>/<song>.json and summary.json.
+Results: android/build/emulator/[<out>/]<mode>/<song>.json and summary.json.
 """
 
 from __future__ import annotations
@@ -199,7 +199,11 @@ def main() -> int:
     parser.add_argument("--songs", nargs="+", help="song ids (default: every cached song)")
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--skip-install", action="store_true")
+    parser.add_argument("--out", help="results under build/emulator/<out>/ (default: build/emulator/)")
     args = parser.parse_args()
+    global OUT
+    if args.out:
+        OUT = OUT / args.out
 
     songs = sorted(p for p in DOWNLOADS.iterdir() if p.suffix in {".webm", ".m4a", ".mp3", ".opus"})
     if args.songs:

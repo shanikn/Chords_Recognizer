@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -69,7 +70,14 @@ struct AnalysisError : std::runtime_error {
     using std::runtime_error::runtime_error;
 };
 
-// stage (e.g. "tracking beats"), and a fraction 0..1 for the whole analysis
+// The analysis cancelled through the `cancel` flag.
+struct Cancelled : std::runtime_error {
+    Cancelled() : std::runtime_error("cancelled") {}
+};
+
+// Per-stage progress: stage is one of "beats", "chords", "key", "bars", "chart"; fraction
+// 0..1 of that stage (1 = done). Called from the analysis's threads (beats and chords run at
+// the same time), so it must be thread-safe.
 using Progress = std::function<void(const std::string& stage, double fraction)>;
 
 class Analyzer {
@@ -80,7 +88,9 @@ public:
     Analyzer& operator=(const Analyzer&) = delete;
 
     // Mono 16-bit PCM at 44.1 kHz (what the desktop pipeline decodes with ffmpeg).
-    Song analyze(const int16_t* pcm, size_t samples, const Progress& progress = {}) const;
+    // Setting *cancel stops the analysis at the next checkpoint (Cancelled is thrown).
+    Song analyze(const int16_t* pcm, size_t samples, const Progress& progress = {},
+                 const std::atomic<bool>* cancel = nullptr) const;
 
 private:
     struct Impl;

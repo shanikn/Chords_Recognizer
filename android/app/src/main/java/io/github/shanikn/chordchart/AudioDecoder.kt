@@ -45,18 +45,18 @@ object AudioDecoder {
     @Volatile var forceMediaCodec = false
 
     private fun decode(pfd: ParcelFileDescriptor, progress: ((Double) -> Unit)?): ShortArray {
-        // The core opens the same file through /proc/self/fd (in-process, no copy).
-        val path = "/proc/self/fd/${pfd.fd}"
+        // The core reads the file through the descriptor (in-process).
+        val fd = pfd.fd
         if (!forceExtractor && !forceMediaCodec) {
             val started = System.nanoTime()
             val listener = progress?.let { p -> ProgressListener { _, f -> p(f) } }
-            Native.decodeFile(path, listener)?.let { pcm ->
+            Native.decodeFile(fd, listener)?.let { pcm ->
                 lastStats = mapOf("codec" to "libopus (in-process)", "packets_from" to "in-process",
                     "total_s" to (System.nanoTime() - started) / 1e9)
                 return pcm
             }
         }
-        val native = if (forceExtractor) 0L else Native.openDemuxer(path)
+        val native = if (forceExtractor) 0L else Native.openDemuxer(fd)
         return if (native != 0L) {
             try {
                 decode(NativeSource(native), progress)

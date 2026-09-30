@@ -1,0 +1,15 @@
+Third-party software and models in this app
+
+madmom (CPJKU): chord and key recognition models, and the beat-to-bar tracking (DBN). Code: BSD 2-Clause License. Model files: Creative Commons BY-NC-SA 4.0, so this app is for non-commercial use only. https://github.com/CPJKU/madmom
+
+Beat This! (CPJKU): the beat and downbeat model. MIT License. https://github.com/CPJKU/beat_this
+
+ONNX Runtime (Microsoft): runs the models. MIT License. https://github.com/microsoft/onnxruntime
+
+PocketFFT (Max-Planck-Society, Martin Reinecke): spectrograms. BSD 3-Clause License. https://github.com/mreineck/pocketfft
+
+libsoxr (Rob Sykes; the fork used by python-soxr): resampling. GNU LGPL 2.1 or later, linked as a separate shared library (libsoxr.so) that can be replaced. https://github.com/dofuuz/soxr
+
+Opus (Xiph.Org Foundation and contributors): decoding WebM and Ogg Opus audio. BSD 3-Clause License. https://opus-codec.org
+
+Jetpack Compose and AndroidX (Google): the user interface. Apache License 2.0.

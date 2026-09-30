@@ -14,9 +14,10 @@ import java.io.File
 class ChordAnalyzer(context: Context, threads: Int = 4, xnnpack: Boolean = false) : Closeable {
     private var handle = Native.createAnalyzer(AnalysisAssets.prepare(context).path, threads, xnnpack)
 
-    fun analyze(pcm: ShortArray, listener: ProgressListener? = null): String {
+    /** @param session from Native.createSession (progress, cancel), or 0 */
+    fun analyze(pcm: ShortArray, session: Long = 0L): String {
         check(handle != 0L) { "closed" }
-        return Native.analyze(handle, pcm, listener)
+        return Native.analyze(handle, pcm, session)
     }
 
     override fun close() {

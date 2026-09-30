@@ -3,9 +3,12 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include "chordchart/analyzer.hpp"
+
 namespace chordchart {
 
-Logits beat_this_logits(const Array<float>& mel, const OnnxModel& model, const Tables& t) {
+Logits beat_this_logits(const Array<float>& mel, const OnnxModel& model, const Tables& t,
+                        const std::function<bool(double)>& on_chunk) {
     const long long n = static_cast<long long>(mel.rows());
     const long long chunk = t.bt_chunk, border = t.bt_border;
     const size_t n_mels = mel.cols();
@@ -20,6 +23,7 @@ Logits beat_this_logits(const Array<float>& mel, const OnnxModel& model, const T
     if (n > chunk - 2 * border && !starts.empty()) starts.back() = n - (chunk - border);
 
     std::vector<float> buffer;
+    size_t done = 0;
     for (auto it = starts.rbegin(); it != starts.rend(); ++it) {  // the first chunk wins overlaps
         const long long start = *it;
         const long long lo = std::max(start, 0LL), hi = std::min(start + chunk, n);
@@ -42,6 +46,7 @@ Logits beat_this_logits(const Array<float>& mel, const OnnxModel& model, const T
             out.beat[static_cast<size_t>(target_lo + i)] = b[static_cast<size_t>(border + i)];
             out.down[static_cast<size_t>(target_lo + i)] = d[static_cast<size_t>(border + i)];
         }
+        if (on_chunk && !on_chunk(static_cast<double>(++done) / starts.size())) throw Cancelled();
     }
     return out;
 }
