@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (report lines)
 """Run the Android app's analysis on every cached song, on the emulator (or a phone), and
 compare it with the Python pipeline.
 
@@ -73,21 +74,30 @@ def copy_song(song: Path) -> None:
     adb("shell", "rm", "-f", tmp)
 
 
-def run_song(song: Path, mode: str, threads: int, timeout: float = 900) -> dict:
+def run_song(song: Path, mode: str, threads: int, timeout: float = 900, attempts: int = 2) -> dict:
     out_name = f"{mode}-{song.stem}.json"
-    run_as(f"rm -f files/bench/{out_name}", check=False)
-    adb("shell", "am", "force-stop", PACKAGE)
-    adb("shell", "am", "start", "-W", "-n", f"{PACKAGE}/.BenchmarkActivity",
-        "--es", "file", f"{DEVICE_DIR}/songs/{song.name}", "--es", "out", out_name,
-        "--ez", "xnnpack", "true" if mode == "xnnpack" else "false", "--ei", "threads", str(threads))  # fmt: skip
-    deadline = time.monotonic() + timeout
-    while True:
-        listing = run_as(f"ls files/bench/{out_name}", check=False)
-        if listing.endswith(out_name):
+    for attempt in range(1, attempts + 1):
+        run_as(f"rm -f files/bench/{out_name}", check=False)
+        # -S: stop the app first, so every song starts in a fresh process
+        adb("shell", "am", "start", "-S", "-W", "-n", f"{PACKAGE}/.BenchmarkActivity",
+            "--es", "file", f"{DEVICE_DIR}/songs/{song.name}", "--es", "out", out_name,
+            "--ez", "xnnpack", "true" if mode == "xnnpack" else "false", "--ei", "threads", str(threads))  # fmt: skip
+        deadline = time.monotonic() + timeout
+        done = False
+        started = time.monotonic()
+        while time.monotonic() < deadline:
+            if run_as(f"ls files/bench/{out_name}", check=False).endswith(out_name):
+                done = True
+                break
+            # the process gone without a result (killed, crashed, or never started): retry
+            if time.monotonic() - started > 10 and not adb("shell", "pidof", PACKAGE, check=False):
+                break
+            time.sleep(1)
+        if done:
             break
-        if time.monotonic() > deadline:
-            raise RuntimeError(f"{song.name}: no result after {timeout:.0f} s")
-        time.sleep(1)
+        print(f"   {song.name} {mode}: no result (attempt {attempt}); retrying", flush=True)
+    else:
+        raise RuntimeError(f"{song.name}: no result after {attempts} attempts")
     time.sleep(0.5)  # the file is written in one go; give the writer a moment to close it
     local = OUT / mode / f"{song.stem}.json"
     local.parent.mkdir(parents=True, exist_ok=True)
@@ -116,10 +126,8 @@ def agreement(ours: dict, theirs: dict) -> dict:
     )
     fields = ("bars", "bpm", "meter")
     return {
-        "identical": all(
-            json.dumps(ours[f], sort_keys=True) == json.dumps(theirs[f], sort_keys=True)
-            for f in fields
-        )
+        # compared as values: the core writes 2.0 as 2, Python as 2.0
+        "identical": all(ours[f] == theirs[f] for f in fields)
         and ours["key"]["tonic"] == theirs["key"]["tonic"]
         and ours["key"]["mode"] == theirs["key"]["mode"],
         "chords": same / max(1, len(steps)),
@@ -150,7 +158,7 @@ def beatles_scores(results: dict[str, dict]) -> dict:
         s = results[stem]["song"]
         ref_intervals, ref_labels = data.read_chords(song.chord_file)
         ref_beats, ref_positions = data.read_beats(song.beat_file)
-        path = next(DOWNLOADS.glob(stem + ".*"))
+        path = next(p for p in DOWNLOADS.glob(stem + ".*") if p.suffix != ".json")
         with tempfile.TemporaryDirectory() as tmp:
             wav = Path(tmp) / "a.wav"
             decoded = decode_section(path, wav)
