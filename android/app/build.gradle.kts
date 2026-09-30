@@ -3,11 +3,21 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// The Beat This! model lives in the repository once (chordchart/models); it's copied into
-// the app's assets at build time (git-ignored there), next to the tables and madmom's CNNs.
-val copyBeatThis = tasks.register<Copy>("copyBeatThis") {
-    from(rootProject.file("../chordchart/models/beat_this_small0.onnx"))
-    into(file("src/main/assets/analysis"))
+// The models and tables the analysis loads aren't in git: tools/prepare_assets.py generates
+// them (deterministically) into src/main/assets/analysis.
+val checkAnalysisAssets = tasks.register("checkAnalysisAssets") {
+    val dir = file("src/main/assets/analysis")
+    doLast {
+        val needed = listOf("chord_features.onnx", "key.onnx", "beat_this_small0.onnx", "settings.json", "crf_W.npy", "dbn4_states.npy")
+        val missing = needed.filterNot { File(dir, it).isFile }
+        if (missing.isNotEmpty()) {
+            throw GradleException(
+                "Missing analysis assets (${missing.joinToString()}). Generate them first:
+" +
+                    "    uv run --with onnx --with onnxscript python android/tools/prepare_assets.py"
+            )
+        }
+    }
 }
 
 android {
@@ -68,7 +78,7 @@ android {
     }
 }
 
-tasks.named("preBuild") { dependsOn(copyBeatThis) }
+tasks.named("preBuild") { dependsOn(checkAnalysisAssets) }
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2026.09.00")
