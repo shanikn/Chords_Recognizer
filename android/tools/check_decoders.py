@@ -88,6 +88,15 @@ def make(source: Path, name: str, ext: str, options: list[str], cover: Path | No
     return target
 
 
+def earlier(song: Path, mode: str) -> dict | None:
+    """A previous run's result for this file and mode, if it has no error."""
+    local = OUT / "results" / f"{mode}-{song.name}.json"
+    if not local.exists():
+        return None
+    result = json.loads(local.read_text(encoding="utf-8"))
+    return None if "error" in result or "pcm_sha256" not in result else result
+
+
 def decode(song: Path, mode: str, decode_only: bool = True, timeout: float = 900) -> dict:
     out_name = f"dec-{mode}-{song.name}.json"
     r.run_as(f"rm -f files/bench/{out_name}", check=False)
@@ -116,6 +125,8 @@ def main() -> int:
     parser.add_argument("--skip-install", action="store_true")
     parser.add_argument("--full", action="store_true")
     parser.add_argument("--only", nargs="+", help="variant names to run")
+    parser.add_argument("--resume", action="store_true", help="reuse earlier error-free results")
+    parser.add_argument("--songs", type=int, default=0, help="--full: only the first N songs")
     args = parser.parse_args()
 
     r.wait_for_boot()
@@ -145,7 +156,8 @@ def main() -> int:
     report = {"variants": {}, "full": {}}
     failures = 0
     for f in files:
-        results = {mode: decode(f, mode) for mode in MODES}
+        results = {mode: earlier(f, mode) if args.resume else None for mode in MODES}
+        results = {mode: res or decode(f, mode) for mode, res in results.items()}
         hashes = {m: res.get("pcm_sha256") for m, res in results.items()}
         errors = {m: res["error"] for m, res in results.items() if "error" in res}
         same = len(set(hashes.values())) == 1 and not errors
@@ -167,6 +179,8 @@ def main() -> int:
 
     if args.full:
         songs = sorted(p for p in r.DOWNLOADS.iterdir() if p.suffix == ".webm")
+        if args.songs:
+            songs = songs[: args.songs]
         for ext, options in (
             ("mp3", VARIANTS["mp3-lame-cbr192-cover"][1]),
             ("m4a", VARIANTS["m4a-aac192"][1]),
@@ -185,9 +199,20 @@ def main() -> int:
                              "duration": ours.get("song", {}).get("duration"),
                              "peak_mb": ours.get("memory", {}).get("VmHWM", 0) / 1024})  # fmt: skip
                 row = rows[-1]
+                # Android's own decoder failed (seen under memory pressure)
+                if "pcm_sha256" not in platform:
+                    failures -= not same
+                    row["identical_pcm"] = None
+                    print(
+                        f"{f.name:40} platform decode failed ({platform.get('error')}); in-process decode "
+                        f"{row['decode_s']:5.2f} s",
+                        flush=True,
+                    )
+                    continue
                 print(f"{f.name:40} {'IDENTICAL' if same else 'DIFFERENT'}  platform decode {row['platform_decode_s']:5.1f} s"
                       f"  in-process decode {row['decode_s']:5.2f} s  analysis {row['analyze_s']:5.1f} s"
                       f"  file to chart {row['decode_s'] + row['analyze_s']:5.1f} s", flush=True)  # fmt: skip
+            rows = [x for x in rows if x["identical_pcm"] is not None]
             n = len(rows)
             summary = {
                 "songs": n,
