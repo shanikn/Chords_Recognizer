@@ -199,7 +199,9 @@ def main() -> int:
     parser.add_argument("--songs", nargs="+", help="song ids (default: every cached song)")
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--skip-install", action="store_true")
-    parser.add_argument("--out", help="results under build/emulator/<out>/ (default: build/emulator/)")
+    parser.add_argument(
+        "--out", help="results under build/emulator/<out>/ (default: build/emulator/)"
+    )
     args = parser.parse_args()
     global OUT
     if args.out:

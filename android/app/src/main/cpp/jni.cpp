@@ -228,9 +228,9 @@ JNIEXPORT jlong JNICALL Java_io_github_shanikn_chordchart_Native_openDemuxer(JNI
 // [sample rate, channels], and the mime type and csd buffers through the other calls
 JNIEXPORT jintArray JNICALL Java_io_github_shanikn_chordchart_Native_demuxerFormat(JNIEnv* env, jclass, jlong handle) {
     const auto& t = reinterpret_cast<Demuxer*>(handle)->track();
-    const jint values[3] = {t.sample_rate, t.channels, static_cast<jint>(t.csd.size())};
-    jintArray out = env->NewIntArray(3);
-    env->SetIntArrayRegion(out, 0, 3, values);
+    const jint values[5] = {t.sample_rate, t.channels, static_cast<jint>(t.csd.size()), t.encoder_delay, t.encoder_padding};
+    jintArray out = env->NewIntArray(5);
+    env->SetIntArrayRegion(out, 0, 5, values);
     return out;
 }
 

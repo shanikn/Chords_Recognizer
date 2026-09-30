@@ -1,5 +1,7 @@
 #include "chordchart/demux.hpp"
 
+#include "demux_internal.hpp"
+
 #include <cstring>
 #include <deque>
 #include <fstream>
@@ -379,7 +381,8 @@ std::unique_ptr<Demuxer> Demuxer::open(std::vector<uint8_t> data) {
     if (data.size() >= 4 && data[0] == 0x1A && data[1] == 0x45 && data[2] == 0xDF && data[3] == 0xA3)
         return std::make_unique<MatroskaDemuxer>(std::move(data));
     if (data.size() >= 4 && std::memcmp(data.data(), "OggS", 4) == 0) return std::make_unique<OggDemuxer>(std::move(data));
-    throw UnsupportedContainer("not WebM, Matroska or Ogg");
+    if (auto mp4 = open_mp4(data)) return mp4;
+    return open_mp3(data);  // last: it scans for frame sync anywhere in the first 128 kB
 }
 
 }  // namespace chordchart

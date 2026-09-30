@@ -10,6 +10,10 @@ PocketFFT (Max-Planck-Society, Martin Reinecke): spectrograms. BSD 3-Clause Lice
 
 libsoxr (Rob Sykes; the fork used by python-soxr): resampling. GNU LGPL 2.1 or later, linked as a separate shared library (libsoxr.so) that can be replaced. https://github.com/dofuuz/soxr
 
+Android's MP3 decoder (The Android Open Source Project; PacketVideo): decoding MP3. Apache License 2.0, full text below. https://android.googlesource.com/platform/frameworks/av (media/module/codecs/mp3dec, android-15.0.0_r1), with Codec2's DRC helper for AAC (media/codec2/components/aac).
+
+Fraunhofer FDK AAC Codec Library for Android (Fraunhofer IIS): decoding AAC. Used unmodified; licence text below. Its complete source code is available free of charge at https://android.googlesource.com/platform/external/aac (tag android-15.0.0_r1). No patent licence is granted with it: AAC patent licences are available through Via LA.
+
 Opus (Xiph.Org Foundation and contributors): decoding WebM and Ogg Opus audio. BSD 3-Clause License. https://opus-codec.org
 
 Jetpack Compose and AndroidX (Google): the user interface. Apache License 2.0.

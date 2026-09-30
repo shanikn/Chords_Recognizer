@@ -348,6 +348,11 @@ private fun FailedScreen(state: Screen.Failed, onPick: () -> Unit) {
 private fun AboutScreen() {
     val context = LocalContext.current
     val notices = remember { context.assets.open("NOTICES.txt").bufferedReader().use { it.readText() } }
+    val licenses = remember {
+        context.assets.list("licenses").orEmpty().sorted().map { name ->
+            name.removeSuffix(".txt") to context.assets.open("licenses/$name").bufferedReader().use { it.readText() }
+        }
+    }
     val version = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text("ChordChart $version", style = MaterialTheme.typography.titleLarge)
@@ -359,5 +364,10 @@ private fun AboutScreen() {
         )
         Spacer(Modifier.height(16.dp))
         Text(notices, style = MaterialTheme.typography.bodySmall)
+        for ((title, text) in licenses) {
+            Spacer(Modifier.height(16.dp))
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(text.trim(), style = MaterialTheme.typography.bodySmall)
+        }
     }
 }

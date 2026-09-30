@@ -15,8 +15,10 @@ import java.nio.ByteBuffer
  * analysis takes: mono 16-bit PCM at 44.1 kHz. The mixing down and resampling happen in the
  * core (chordchart::MonoResampler) as the decoder's output arrives.
  *
- * Packets come from the core's own container reader when it knows the format (WebM and Ogg
- * with Opus: YouTube audio), else from Android's MediaExtractor. MediaExtractor reads every
+ * WebM/Ogg Opus, MP3 and MP4/M4A AAC are decoded entirely in the core (chordchart::decode_file:
+ * the same decoders Android uses, driven the same way, so the audio is identical). Other
+ * files: packets from the core's container reader when it knows the format, else from
+ * Android's MediaExtractor, decoded by MediaCodec. MediaExtractor reads every
  * packet through a separate process (~3 ms per packet on the emulator: 19 s for a 2-minute
  * Opus song); the core reads them in-process. Both feed the same decoder, so the audio is the
  * same either way.
@@ -51,7 +53,7 @@ object AudioDecoder {
             val started = System.nanoTime()
             val listener = progress?.let { p -> ProgressListener { _, f -> p(f) } }
             Native.decodeFile(fd, listener)?.let { pcm ->
-                lastStats = mapOf("codec" to "libopus (in-process)", "packets_from" to "in-process",
+                lastStats = mapOf("codec" to "in-process", "packets_from" to "in-process",
                     "total_s" to (System.nanoTime() - started) / 1e9)
                 return pcm
             }
@@ -88,9 +90,13 @@ object AudioDecoder {
         private val info = LongArray(3)
         override val name = "in-process"
         override val format: MediaFormat = run {
-            val (rate, channels, csdCount) = Native.demuxerFormat(handle)
+            val (rate, channels, csdCount, delay, padding) = Native.demuxerFormat(handle)
             MediaFormat.createAudioFormat(Native.demuxerMime(handle), rate, channels).apply {
                 for (i in 0 until csdCount) setByteBuffer("csd-$i", ByteBuffer.wrap(Native.demuxerCsd(handle, i)))
+                if (delay != 0 || padding != 0) {  // gapless info, as MediaExtractor gives it
+                    setInteger(MediaFormat.KEY_ENCODER_DELAY, delay)
+                    setInteger(MediaFormat.KEY_ENCODER_PADDING, padding)
+                }
                 setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 1 shl 16)
             }
         }
@@ -133,6 +139,7 @@ object AudioDecoder {
         var feedNanos = 0L
         var buffers = 0
         var lastReported = -1.0
+        var formatChanges = 0
         val started = System.nanoTime()
         try {
             val info = MediaCodec.BufferInfo()
@@ -160,6 +167,7 @@ object AudioDecoder {
                 }
                 val outIndex = codec.dequeueOutputBuffer(info, if (queued) 0 else 5_000)
                 if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    formatChanges++
                     val out = codec.outputFormat
                     val encoding = if (out.containsKey(MediaFormat.KEY_PCM_ENCODING))
                         out.getInteger(MediaFormat.KEY_PCM_ENCODING) else AudioFormat.ENCODING_PCM_16BIT
@@ -192,7 +200,7 @@ object AudioDecoder {
             val pcm = Native.finish(resampler)
             progress?.invoke(1.0)
             lastStats = mapOf(
-                "codec" to codec.name, "mime" to mime, "packets_from" to source.name, "buffers" to buffers,
+                "codec" to codec.name, "mime" to mime, "packets_from" to source.name, "buffers" to buffers, "format_changes" to formatChanges,
                 "total_s" to (System.nanoTime() - started) / 1e9,
                 "feed_s" to (feedNanos + System.nanoTime() - t) / 1e9,
             )

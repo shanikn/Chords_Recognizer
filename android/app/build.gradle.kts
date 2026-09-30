@@ -12,12 +12,22 @@ val checkAnalysisAssets = tasks.register("checkAnalysisAssets") {
         val missing = needed.filterNot { File(dir, it).isFile }
         if (missing.isNotEmpty()) {
             throw GradleException(
-                "Missing analysis assets (${missing.joinToString()}). Generate them first:
-" +
+                "Missing analysis assets (${missing.joinToString()}). Generate them first:\n" +
                     "    uv run --with onnx --with onnxscript python android/tools/prepare_assets.py"
             )
         }
     }
+}
+
+// The full licence texts of Android's MP3 and AAC decoders (built into the core), from the
+// fetched sources: shipped with the app, shown on its About screen.
+val decoderLicenses = layout.buildDirectory.dir("generated/licenses")
+val copyDecoderLicenses = tasks.register<Copy>("copyDecoderLicenses") {
+    val thirdParty = rootProject.file("third_party")
+    into(decoderLicenses.map { it.dir("licenses") })
+    from(File(thirdParty, "aosp-aac/NOTICE")) { rename { "Fraunhofer FDK AAC.txt" } }
+    from(File(thirdParty, "aosp-mp3dec/NOTICE")) { rename { "Android Open Source Project (Apache-2.0).txt" } }
+    from(File(thirdParty, "aosp-mp3dec/patent_disclaimer.txt")) { rename { "Android codecs patent disclaimer.txt" } }
 }
 
 android {
@@ -53,6 +63,7 @@ android {
         getByName("main") {
             // ONNX Runtime's prebuilt libonnxruntime.so per ABI (tools/fetch_deps.py)
             jniLibs.directories.add(rootProject.file("third_party/onnxruntime-android/jni").path)
+            assets.directories.add(decoderLicenses.get().asFile.path)
         }
     }
 
@@ -78,7 +89,7 @@ android {
     }
 }
 
-tasks.named("preBuild") { dependsOn(checkAnalysisAssets) }
+tasks.named("preBuild") { dependsOn(checkAnalysisAssets, copyDecoderLicenses) }
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2026.09.00")

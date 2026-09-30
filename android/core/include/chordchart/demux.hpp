@@ -5,8 +5,9 @@
 // for a 2-minute song. This reads the container in the app instead; the packets still go
 // to the platform's decoder, so the decoded audio is the same.
 //
-// Supported: WebM/Matroska and Ogg, with Opus or Vorbis audio. Anything else throws
-// UnsupportedContainer, and the platform falls back to its own extractor.
+// Supported: WebM/Matroska and Ogg with Opus; MP3; MP4/M4A with AAC (demux_mpeg.cpp: the
+// same packets Android's own extractors give). Anything else throws UnsupportedContainer,
+// and the platform falls back to its own extractor.
 
 #pragma once
 
@@ -23,10 +24,13 @@ struct UnsupportedContainer : std::runtime_error {
 };
 
 struct AudioTrack {
-    std::string mime;               // "audio/opus", "audio/vorbis"
+    std::string mime;               // "audio/opus", "audio/mpeg" (MP3), "audio/mp4a-latm" (AAC)
     int sample_rate = 0;
     int channels = 0;
     int64_t duration_us = -1;       // -1: unknown
+    // Gapless playback: samples to drop at the start and end (MediaFormat encoder-delay and
+    // encoder-padding; MediaCodec drops them after decoding). 0: none.
+    int encoder_delay = 0, encoder_padding = 0;
     // Codec-specific data as Android's MediaExtractor gives it (MediaFormat csd-0, -1, -2):
     // Opus: OpusHead, codec delay (ns, int64 LE), seek pre-roll (ns, int64 LE)
     // Vorbis: identification header, setup header

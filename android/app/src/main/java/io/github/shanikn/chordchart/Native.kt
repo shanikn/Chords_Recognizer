@@ -36,6 +36,7 @@ internal object Native {
     @JvmStatic external fun decodeFile(fd: Int, listener: ProgressListener?): ShortArray?
 
     @JvmStatic external fun openDemuxer(fd: Int): Long
+    /** sample rate, channels, csd count, encoder delay, encoder padding */
     @JvmStatic external fun demuxerFormat(handle: Long): IntArray
     @JvmStatic external fun demuxerMime(handle: Long): String
     @JvmStatic external fun demuxerCsd(handle: Long, index: Int): ByteArray

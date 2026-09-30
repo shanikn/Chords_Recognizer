@@ -8,6 +8,7 @@
 
 #include "chordchart/audio.hpp"
 #include "chordchart/demux.hpp"
+#include "decode_internal.hpp"
 
 namespace chordchart {
 
@@ -59,8 +60,18 @@ int64_t read_int64_le(const std::vector<uint8_t>& b) {
 }  // namespace
 
 namespace {
-std::vector<int16_t> decode(std::unique_ptr<Demuxer> demuxer, const std::function<void(double)>& progress);
+
+std::vector<int16_t> decode_opus(Demuxer& demuxer, const std::function<void(double)>& progress);
+
+std::vector<int16_t> decode(std::unique_ptr<Demuxer> demuxer, const std::function<void(double)>& progress) {
+    const std::string& mime = demuxer->track().mime;
+    if (mime == "audio/opus") return decode_opus(*demuxer, progress);
+    if (mime == "audio/mpeg") return decode_mp3(*demuxer, progress);
+    if (mime == "audio/mp4a-latm") return decode_aac(*demuxer, progress);
+    throw UnsupportedContainer("no in-process decoder for " + mime);
 }
+
+}  // namespace
 
 std::vector<int16_t> decode_file(const std::string& path, const std::function<void(double)>& progress) {
     return decode(Demuxer::open(path), progress);
@@ -72,9 +83,9 @@ std::vector<int16_t> decode_file(std::vector<uint8_t> data, const std::function<
 
 namespace {
 
-std::vector<int16_t> decode(std::unique_ptr<Demuxer> demuxer, const std::function<void(double)>& progress) {
-    const AudioTrack& track = demuxer->track();
-    if (track.mime != "audio/opus" || track.csd.size() < 3) throw UnsupportedContainer("not Opus");
+std::vector<int16_t> decode_opus(Demuxer& demuxer, const std::function<void(double)>& progress) {
+    const AudioTrack& track = demuxer.track();
+    if (track.csd.size() < 3) throw UnsupportedContainer("not Opus");
 
     const OpusHeader header = parse_header(track.csd[0]);
     uint8_t channel_mapping[kMaxChannels] = {0};
@@ -99,7 +110,7 @@ std::vector<int16_t> decode(std::unique_ptr<Demuxer> demuxer, const std::functio
     std::vector<int16_t> out(static_cast<size_t>(kMaxOpusOutputPacketSizeSamples) * header.channels);
     Packet packet;
     double reported = -1;
-    while (demuxer->next(packet)) {
+    while (demuxer.next(packet)) {
         if (packet.data.empty()) continue;
         // C2SoftOpusDec: a packet at timestamp 0 restarts the codec-delay discard
         if (packet.time_us == 0) to_discard = codec_delay;
@@ -118,8 +129,8 @@ std::vector<int16_t> decode(std::unique_ptr<Demuxer> demuxer, const std::functio
             }
         }
         if (samples > 0) resampler.feed(out.data() + offset, static_cast<size_t>(samples) * header.channels);
-        if (progress && demuxer->size()) {
-            const double f = static_cast<double>(demuxer->position()) / static_cast<double>(demuxer->size());
+        if (progress && demuxer.size()) {
+            const double f = static_cast<double>(demuxer.position()) / static_cast<double>(demuxer.size());
             if (f - reported >= 0.01) {
                 reported = f;
                 progress(f);
