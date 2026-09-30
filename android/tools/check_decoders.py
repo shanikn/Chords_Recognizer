@@ -7,14 +7,13 @@ Makes MP3 and M4A/MP4 files with ffmpeg from a few cached songs, in the variants
 (LAME CBR with an Info tag and cover art, LAME VBR with a Xing tag, mono, 48 kHz, MPEG-2
 22 kHz, an ID3v1 tag at the end, Shine and Media Foundation encoders; AAC-LC from ffmpeg and
 Media Foundation at 44.1 and 48 kHz, mono, an MP4 video, moov before or after the data),
-copies them into the app on the emulator, and decodes each one three ways
+copies them into the app on the emulator, and decodes each one two ways
 (BenchmarkActivity, decode_only):
 
     platform    MediaExtractor + MediaCodec: how the app decoded MP3/AAC until now
-    demuxer     the core's container reader + MediaCodec (isolates the reader)
     in-process  the core end to end (the new default)
 
-The PCM (mono 44.1 kHz, what the analysis takes) must have the same SHA-256 all three ways.
+The PCM (mono 44.1 kHz, what the analysis takes) must have the same SHA-256 both ways.
 Reported: the hashes, and the decode time of each path.
 
 --full also converts every cached song to MP3 (LAME 192k) and M4A (AAC 192k) and runs the
@@ -59,7 +58,6 @@ VARIANTS = {  # name: (extension, ffmpeg output options)
 }
 MODES = {  # name: BenchmarkActivity extras
     "platform": ["--ez", "extractor", "true"],
-    "demuxer": ["--ez", "mediacodec", "true"],
     "in-process": [],
 }
 

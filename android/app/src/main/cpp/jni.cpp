@@ -216,7 +216,11 @@ JNIEXPORT jshortArray JNICALL Java_io_github_shanikn_chordchart_Native_decodeFil
 // so the caller falls back to MediaExtractor.
 JNIEXPORT jlong JNICALL Java_io_github_shanikn_chordchart_Native_openDemuxer(JNIEnv* env, jclass, jint fd) {
     try {
-        return reinterpret_cast<jlong>(Demuxer::open(read_fd(fd)).release());
+        auto demuxer = Demuxer::open(read_fd(fd));
+        // Only for Opus (WebM/Ogg), whose packets MediaExtractor is slow to hand over. MP3 and
+        // AAC files the core doesn't decode itself go through MediaExtractor, exactly as before.
+        if (demuxer->track().mime != "audio/opus") return 0;
+        return reinterpret_cast<jlong>(demuxer.release());
     } catch (const UnsupportedContainer&) {
         return 0;
     } catch (const std::exception& e) {
