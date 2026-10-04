@@ -137,8 +137,8 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.core:core-ktx:1.17.0")
-    // YouTube and Spotify links (GPL-3.0; the commit NewPipe itself builds with)
-    implementation("com.github.TeamNewPipe:NewPipeExtractor:13a655fe53e0c3065f88725fc1fb594c3ede0169")
+    // YouTube and Spotify links (GPL-3.0; the release NewPipe's own current release uses)
+    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.5")
     // java.time and java.nio for NewPipe Extractor on Android 7
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
 }
