@@ -44,12 +44,21 @@ class Recorder(context: Context) {
         val record = AudioRecord(source, RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuffer, RATE / 2 * 2))
         if (record.state != AudioRecord.STATE_INITIALIZED) {
             record.release()
-            throw Failed("The microphone is busy or unavailable. Close any app that's recording and try again.")
+            throw Failed(BUSY)
+        }
+        try {
+            record.startRecording()
+        } catch (e: IllegalStateException) {
+            record.release()
+            throw Failed(BUSY)
+        }
+        if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {  // another app has the microphone
+            record.release()
+            throw Failed(BUSY)
         }
         running = true
         thread = Thread({
             try {
-                record.startRecording()
                 val buffer = ShortArray(RATE / 10)  // 100 ms
                 while (running && samples < MAX_SAMPLES) {
                     val n = record.read(buffer, 0, buffer.size)
@@ -74,7 +83,7 @@ class Recorder(context: Context) {
 
     /** Stops and returns the recording with quiet trimmed from both ends; Failed if nothing was heard. */
     fun stop(): ShortArray {
-        running = false
+        finish()
         thread?.join()
         error?.let { throw Failed(it) }
         val all = ShortArray(synchronized(chunks) { chunks.sumOf { it.size } })
@@ -96,6 +105,11 @@ class Recorder(context: Context) {
         return all.copyOfRange(first, end)
     }
 
+    /** Stops recording without waiting; stop() then returns what was heard. */
+    fun finish() {
+        running = false
+    }
+
     /** Stops and throws the recording away. */
     fun cancel() {
         running = false
@@ -108,6 +122,7 @@ class Recorder(context: Context) {
         const val MAX_SECONDS = 10 * 60
         private const val MAX_SAMPLES = MAX_SECONDS.toLong() * RATE
         private const val MIN_SAMPLES = 10 * RATE
+        private const val BUSY = "The microphone is busy or unavailable. Close any app that's recording and try again."
         private const val QUIET = 60.0  // RMS of a half-second window, of 32768: about -55 dBFS
 
         private fun rms(pcm: ShortArray, start: Int, count: Int): Double {

@@ -96,6 +96,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun stopListening() {
         val r = recorder ?: return
         recorder = null
+        r.finish()  // the microphone stops now, even if the analysis is cancelled before r.stop()
         val title = "Recording, " + DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date())
         start(title, emptyList()) {
             val pcm = withContext(Dispatchers.IO) { r.stop() }
