@@ -52,7 +52,7 @@ android {
 
     defaultConfig {
         applicationId = "io.github.shanikn.chordchart"
-        minSdk = 26
+        minSdk = 24  // Android 7.0; ONNX Runtime 1.30 is built for API 24 too
         targetSdk = 35
         // CI passes -PversionCode=<run number>, so each build installs over the previous one.
         versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
