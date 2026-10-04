@@ -34,6 +34,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -152,6 +153,27 @@ fun ChordChartTheme(content: @Composable () -> Unit) {
     }
 }
 
+/** An arrow pointing up out of a tray: the usual "upload a file" sign. */
+@Composable
+private fun UploadIcon() {
+    val ink = LocalContentColor.current
+    Canvas(Modifier.size(20.dp)) {
+        val w = size.width
+        val h = size.height
+        val stroke = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val arrow = Path().apply {
+            moveTo(w * 0.5f, h * 0.68f); lineTo(w * 0.5f, h * 0.08f)
+            moveTo(w * 0.22f, h * 0.34f); lineTo(w * 0.5f, h * 0.08f); lineTo(w * 0.78f, h * 0.34f)
+        }
+        val tray = Path().apply {
+            moveTo(w * 0.1f, h * 0.66f); lineTo(w * 0.1f, h * 0.92f)
+            lineTo(w * 0.9f, h * 0.92f); lineTo(w * 0.9f, h * 0.66f)
+        }
+        drawPath(arrow, ink, style = stroke)
+        drawPath(tray, ink, style = stroke)
+    }
+}
+
 /** A moon in light mode (tap for dark), a sun in dark mode (tap for light). */
 @Composable
 private fun DarkModeButton() {
@@ -251,7 +273,9 @@ private fun HomeScreen(
             )
             Spacer(Modifier.height(16.dp))
             Button(onClick = onPick, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-                Text("Choose a song", style = MaterialTheme.typography.titleMedium)
+                UploadIcon()
+                Spacer(Modifier.width(10.dp))
+                Text("Upload a song", style = MaterialTheme.typography.titleMedium)
             }
             Spacer(Modifier.height(8.dp))
             Text(

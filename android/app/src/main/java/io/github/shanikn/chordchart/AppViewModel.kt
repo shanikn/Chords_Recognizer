@@ -196,7 +196,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: AudioDecoder.Unsupported) {
                 _screen.value = Screen.Failed(title, e.message ?: "this file can't be read")
             } catch (e: SecurityException) {
-                _screen.value = Screen.Failed(title, "ChordChart wasn't allowed to open this file. Try \"Choose a song\" instead.")
+                _screen.value = Screen.Failed(title, "ChordChart wasn't allowed to open this file. Try \"Upload a song\" instead.")
             } catch (e: java.io.FileNotFoundException) {
                 _screen.value = Screen.Failed(title, "The file isn't there any more.")
             } catch (e: java.net.UnknownHostException) {

@@ -99,7 +99,7 @@ the history (keyed by a hash of the file's bytes).
 
 ## 4. The app
 
-- **Home** (`screenshots/home-empty.png`, `home-history.png`): "Choose a song" (the system
+- **Home** (`screenshots/home-empty.png`, `home-history.png`): "Upload a song" (the system
   file picker, audio and video), recent charts with key/BPM/length/date, delete with
   confirmation.
 - **Share / open with**: `ACTION_SEND` and `ACTION_VIEW` for `audio/*` and `video/*`
