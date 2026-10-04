@@ -224,7 +224,7 @@ fun App(
                             is Screen.Analyzing -> screen.title
                             is Screen.Failed -> screen.title
                             Screen.About -> "About"
-                            Screen.Home -> "ChordChart"
+                            Screen.Home -> "Chord Chart"
                         },
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
@@ -279,7 +279,7 @@ private fun HomeScreen(
             }
             Spacer(Modifier.height(8.dp))
             Text(
-                "Or share an audio or video file to ChordChart from another app.",
+                "Or share an audio or video file to Chord Chart from another app.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -309,7 +309,7 @@ private fun HomeScreen(
             ) { Text("Chart this link") }
             Spacer(Modifier.height(8.dp))
             Text(
-                "Or share a video or song to ChordChart from the YouTube or Spotify app. " +
+                "Or share a video or song to Chord Chart from the YouTube or Spotify app. " +
                     "The audio is downloaded, then analysed on this phone.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -599,7 +599,7 @@ private fun AboutScreen() {
     }
     val version = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Text("ChordChart $version", style = MaterialTheme.typography.titleLarge)
+        Text("Chord Chart $version", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(8.dp))
         Text(
             "Songs are analysed on the phone and never leave it. The internet is used only for " +

@@ -190,7 +190,7 @@ object LinkSource {
         extractor.fetchPage()
         val length = extractor.length.toDouble()
         if (length > MAX_DURATION) {
-            throw LinkError("This video is ${length.toInt() / 60} minutes long; ChordChart takes songs up to ${(MAX_DURATION / 60).toInt()} minutes.")
+            throw LinkError("This video is ${length.toInt() / 60} minutes long; Chord Chart takes songs up to ${(MAX_DURATION / 60).toInt()} minutes.")
         }
         val streams = extractor.audioStreams.filter {
             it.isUrl && it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP &&
@@ -198,7 +198,7 @@ object LinkSource {
         }
         val original = streams.filter { it.audioTrackType == null || it.audioTrackType == AudioTrackType.ORIGINAL }
         val best = original.ifEmpty { streams }.maxByOrNull { it.averageBitrate.takeIf { b -> b > 0 } ?: it.bitrate }
-            ?: throw LinkError("YouTube has no audio for this video that ChordChart can read.")
+            ?: throw LinkError("YouTube has no audio for this video that Chord Chart can read.")
         Audio(extractor.name.orEmpty().ifEmpty { link.videoId }, length, best)
     }
 
