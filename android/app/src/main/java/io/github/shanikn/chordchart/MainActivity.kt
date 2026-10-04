@@ -1,6 +1,8 @@
 package io.github.shanikn.chordchart
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -11,6 +13,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 class MainActivity : ComponentActivity() {
@@ -28,7 +31,25 @@ class MainActivity : ComponentActivity() {
                 val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                     uri?.let(model::open)
                 }
-                App(screen, entries, onPick = { picker.launch(arrayOf("audio/*", "video/*")) }, model = model)
+                val microphone = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+                    if (granted) model.listen() else model.failed(
+                        "Listen",
+                        "Chord Chart needs the microphone to hear the song. Allow it when Android asks, " +
+                            "or in Settings, Apps, Chord Chart, Permissions.",
+                    )
+                }
+                App(
+                    screen, entries,
+                    onPick = { picker.launch(arrayOf("audio/*", "video/*")) },
+                    onListen = {
+                        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                            model.listen()
+                        } else {
+                            microphone.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    },
+                    model = model,
+                )
             }
         }
     }

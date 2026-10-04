@@ -13,6 +13,9 @@ the Google Play version doesn't have permission to use the internet at all.
 
 - **Songs you open** are read from your phone only to analyse them. They are never
   uploaded, copied elsewhere, or shared with anyone.
+- **The microphone** is used only while you're on the Listen screen, after you allow
+  it: the app records the song you play, analyses the recording on the phone, then
+  discards it. Only the chart is kept. No recording is saved or sent anywhere.
 - **Charts** (the result of an analysis: song title, file name, chords, beats, key,
   tempo and when it was analysed) are saved in the app's private storage on your phone,
   so you can open them again. Delete one from the app's home screen, or remove them all
