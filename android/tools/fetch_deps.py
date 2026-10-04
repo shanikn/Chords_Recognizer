@@ -32,6 +32,8 @@ import os
 import shutil
 import sys
 import tarfile
+import time
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -92,8 +94,29 @@ def fetch(name: str, url: str) -> Path:
     if not path.exists():
         print(f"downloading {name}...", flush=True)
         partial = path.with_suffix(path.suffix + ".part")
-        with urllib.request.urlopen(url, timeout=120) as response, partial.open("wb") as out:
-            shutil.copyfileobj(response, out)
+        # android.googlesource.com builds archives on demand and answers 503 or 429 now
+        # and then (seen on GitHub's runners): try again a few times before giving up.
+        for attempt in range(5):
+            try:
+                with (
+                    urllib.request.urlopen(url, timeout=120) as response,
+                    partial.open("wb") as out,
+                ):
+                    shutil.copyfileobj(response, out)
+                break
+            except (urllib.error.URLError, TimeoutError) as error:
+                retriable = not isinstance(error, urllib.error.HTTPError) or error.code in (
+                    429,
+                    500,
+                    502,
+                    503,
+                    504,
+                )
+                if attempt == 4 or not retriable:
+                    raise
+                wait = 10 * 2**attempt
+                print(f"  {error}; retrying in {wait} s", flush=True)
+                time.sleep(wait)
         partial.replace(path)
     return path
 
