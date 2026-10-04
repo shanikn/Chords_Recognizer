@@ -4,6 +4,8 @@ with six strings and three coral finger dots.
 - Android 8+: an adaptive icon (peach background + the soundhole as a vector), so each
   launcher can mask it to its own shape.
 - Android 7: PNGs per screen density, a rounded square and a circle.
+- Google Play: the 512 px store icon (square; Play rounds it) and the 1024x500 feature
+  graphic, into docs/play/.
 
 Rerun after changing the design below (needs cairosvg and Pillow):
 
@@ -21,6 +23,7 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[2]
 RES = ROOT / "android" / "app" / "src" / "main" / "res"
+PLAY = ROOT / "android" / "docs" / "play"
 DENSITIES = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
 
 # The design, on a 1024-unit square.
@@ -91,6 +94,27 @@ def _png(size: int, rounded: float = 0, circle: bool = False) -> bytes:
     return out.getvalue()
 
 
+def feature_svg() -> str:
+    """Google Play's feature graphic (1024x500): the soundhole, its strings running the full
+    height, and the app's name."""
+    scale = 0.56
+    tx, ty = 240 - C * scale, 250 - C * scale
+    design = svg().split('<g clip-path="url(#c)">', 1)[1].rsplit("</g>", 1)[0]
+    design = design.split("/>", 1)[1]  # without the square background
+    design = design.replace('y1="-10"', f'y1="{-ty / scale - 10:.0f}"').replace(
+        'y2="1034"', f'y2="{(500 - ty) / scale + 10:.0f}"')
+    font = "DejaVu Sans, Liberation Sans, Arial, sans-serif"
+    return (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">'
+        f'<rect width="1024" height="500" fill="{PEACH}"/>'
+        f'<g transform="translate({tx:.1f},{ty:.1f}) scale({scale})">{design}</g>'
+        f'<text x="490" y="232" font-family="{font}" font-weight="bold" font-size="62" fill="{INK}">Chord Chart</text>'
+        f'<text x="492" y="290" font-family="{font}" font-size="26" fill="{INK}">Chords, beats and bars of a song,</text>'
+        f'<text x="492" y="326" font-family="{font}" font-size="26" fill="{INK}">worked out on your phone.</text>'
+        "</svg>"
+    )
+
+
 def _p(x: float, y: float) -> str:
     return f"{OFFSET + SCALE * x:.2f},{OFFSET + SCALE * y:.2f}"
 
@@ -159,7 +183,11 @@ def main() -> None:
         f'    <color name="ic_launcher_background">{PEACH}</color>\n</resources>\n',
         newline="\n",
     )
-    print(f"wrote the launcher icon into {RES}")
+    PLAY.mkdir(parents=True, exist_ok=True)
+    (PLAY / "icon-512.png").write_bytes(_png(512))
+    feature = io.BytesIO(cairosvg.svg2png(bytestring=feature_svg().encode(), output_width=1024, output_height=500))
+    Image.open(feature).convert("RGB").save(PLAY / "feature-graphic.png", "PNG", optimize=True)
+    print(f"wrote the launcher icon into {RES}, the Play icon and feature graphic into {PLAY}")
 
 
 if __name__ == "__main__":

@@ -148,7 +148,7 @@ def export(module: nn.Module, bands: int, path: Path, output: str) -> None:
 
 
 def main() -> int:
-    OUT.mkdir(exist_ok=True)
+    OUT.mkdir(parents=True, exist_ok=True)  # src/main/assets has no files in git
     chord, key = networks()
     with torch.no_grad():
         export(ChordFeatures(chord), CHORD_BANDS, OUT / "chord_features.onnx", "features")

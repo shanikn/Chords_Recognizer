@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The sideload build's additions: YouTube and Spotify links. The Play build has neither. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Only for YouTube and Spotify links: songs on the phone are analysed offline. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application>
+        <activity android:name=".MainActivity">
+            <!-- A YouTube or Spotify link shared to Chord Chart -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -254,6 +254,44 @@ fun App(
     if (screen != Screen.Home) BackHandler { if (screen is Screen.Analyzing) model.cancel() else model.home() }
 }
 
+/** A YouTube or Spotify link to chart (the sideload build only). */
+@Composable
+private fun LinkField(onLink: (String) -> Unit) {
+    var link by rememberSaveable { mutableStateOf("") }
+    val clipboard = LocalClipboardManager.current
+    Spacer(Modifier.height(24.dp))
+    OutlinedTextField(
+        value = link,
+        onValueChange = { link = it },
+        modifier = Modifier.fillMaxWidth(),
+        label = { Text("YouTube or Spotify link") },
+        placeholder = { Text("https://youtu.be/…") },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
+        keyboardActions = KeyboardActions(onGo = { if (link.isNotBlank()) onLink(link.trim()) }),
+        trailingIcon = {
+            if (link.isEmpty()) {
+                TextButton(onClick = { clipboard.getText()?.text?.let { link = it.trim() } }) { Text("Paste") }
+            } else {
+                TextButton(onClick = { link = "" }) { Text("Clear") }
+            }
+        },
+    )
+    Spacer(Modifier.height(8.dp))
+    OutlinedButton(
+        onClick = { onLink(link.trim()) },
+        enabled = link.isNotBlank(),
+        modifier = Modifier.fillMaxWidth().height(48.dp),
+    ) { Text("Chart this link") }
+    Spacer(Modifier.height(8.dp))
+    Text(
+        "Or share a video or song to Chord Chart from the YouTube or Spotify app. " +
+            "The audio is downloaded, then analysed on this phone.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
 @Composable
 private fun HomeScreen(
     entries: List<History.Entry>,
@@ -263,8 +301,6 @@ private fun HomeScreen(
     onDelete: (History.Entry) -> Unit,
 ) {
     var confirm by remember { mutableStateOf<History.Entry?>(null) }
-    var link by rememberSaveable { mutableStateOf("") }
-    val clipboard = LocalClipboardManager.current
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
         item {
             Text(
@@ -283,37 +319,7 @@ private fun HomeScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(24.dp))
-            OutlinedTextField(
-                value = link,
-                onValueChange = { link = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("YouTube or Spotify link") },
-                placeholder = { Text("https://youtu.be/…") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
-                keyboardActions = KeyboardActions(onGo = { if (link.isNotBlank()) onLink(link.trim()) }),
-                trailingIcon = {
-                    if (link.isEmpty()) {
-                        TextButton(onClick = { clipboard.getText()?.text?.let { link = it.trim() } }) { Text("Paste") }
-                    } else {
-                        TextButton(onClick = { link = "" }) { Text("Clear") }
-                    }
-                },
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = { onLink(link.trim()) },
-                enabled = link.isNotBlank(),
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-            ) { Text("Chart this link") }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Or share a video or song to Chord Chart from the YouTube or Spotify app. " +
-                    "The audio is downloaded, then analysed on this phone.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (BuildConfig.LINKS) LinkField(onLink)
             Spacer(Modifier.height(24.dp))
             if (entries.isNotEmpty()) Text("Recent", style = MaterialTheme.typography.titleMedium)
         }
@@ -602,10 +608,15 @@ private fun AboutScreen() {
         Text("Chord Chart $version", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Songs are analysed on the phone and never leave it. The internet is used only for " +
-                "YouTube and Spotify links: to read the link and download the song's audio (from " +
-                "YouTube; for a Spotify link, the same recording found on YouTube, since Spotify's " +
-                "own audio is never used). Charts are kept on the phone until you delete them.",
+            if (BuildConfig.LINKS) {
+                "Songs are analysed on the phone and never leave it. The internet is used only for " +
+                    "YouTube and Spotify links: to read the link and download the song's audio (from " +
+                    "YouTube; for a Spotify link, the same recording found on YouTube, since Spotify's " +
+                    "own audio is never used). Charts are kept on the phone until you delete them."
+            } else {
+                "Songs are analysed on the phone and never leave it: Chord Chart doesn't use the " +
+                    "internet at all. Charts are kept on the phone until you delete them."
+            },
             style = MaterialTheme.typography.bodyMedium,
         )
         Spacer(Modifier.height(16.dp))

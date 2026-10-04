@@ -54,7 +54,7 @@ android {
     defaultConfig {
         applicationId = "io.github.shanikn.chordchart"
         minSdk = 24  // Android 7.0; ONNX Runtime 1.30 is built for API 24 too
-        targetSdk = 35
+        targetSdk = 36  // Google Play's minimum for new apps and updates from 31 August 2026
         // CI passes -PversionCode=<run number>, so each build installs over the previous one.
         versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
         versionName = (findProperty("versionName") as String?) ?: "0.3.0"  // CI: from a v* tag
@@ -62,6 +62,23 @@ android {
             cmake {
                 arguments += listOf("-DANDROID_STL=c++_shared")
             }
+        }
+    }
+
+    // Two builds of the same app (same application id):
+    //   full  the sideload APK (GitHub releases): adds YouTube and Spotify links, via NewPipe
+    //         Extractor, and the internet permission they need
+    //   play  Google Play: songs from the phone only. Play doesn't allow downloading YouTube's
+    //         audio, so it has no NewPipe Extractor, no links and no internet permission.
+    flavorDimensions += "store"
+    productFlavors {
+        create("full") {
+            dimension = "store"
+            buildConfigField("boolean", "LINKS", "true")
+        }
+        create("play") {
+            dimension = "store"
+            buildConfigField("boolean", "LINKS", "false")
         }
     }
 
@@ -112,6 +129,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
@@ -137,8 +155,8 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.core:core-ktx:1.17.0")
-    // YouTube and Spotify links (GPL-3.0; the release NewPipe's own current release uses)
-    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.5")
-    // java.time and java.nio for NewPipe Extractor on Android 7
+    // YouTube and Spotify links, sideload build only (GPL-3.0; the release NewPipe's own current release uses)
+    "fullImplementation"("com.github.TeamNewPipe:NewPipeExtractor:v0.26.5")
+    // java.time and java.nio on Android 7 (NewPipe Extractor needs them)
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
 }
