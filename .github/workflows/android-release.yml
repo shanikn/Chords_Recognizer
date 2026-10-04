@@ -6,6 +6,8 @@
 # Signing: with the four CHORDCHART_* secrets set (see android/README.md), every build is
 # signed with your own key and installs over the previous one. Without them it is signed
 # with the runner's throwaway debug key: installable, but not over an earlier build.
+# Pull request builds never see the key: they run the PR's own Gradle scripts, which
+# could otherwise read it. They are always signed with the throwaway debug key.
 name: Android release APK
 
 on:
@@ -58,6 +60,7 @@ jobs:
         run: uv run --with onnx --with onnxscript python android/tools/prepare_assets.py
 
       - name: Signing key
+        if: github.event_name != 'pull_request'
         env:
           KEYSTORE_BASE64: ${{ secrets.CHORDCHART_KEYSTORE_BASE64 }}
         run: |
@@ -73,11 +76,13 @@ jobs:
       - name: Build the release APK
         working-directory: android
         env:
-          CHORDCHART_KEYSTORE_PASSWORD: ${{ secrets.CHORDCHART_KEYSTORE_PASSWORD }}
-          CHORDCHART_KEY_ALIAS: ${{ secrets.CHORDCHART_KEY_ALIAS }}
-          CHORDCHART_KEY_PASSWORD: ${{ secrets.CHORDCHART_KEY_PASSWORD }}
+          CHORDCHART_KEYSTORE_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.CHORDCHART_KEYSTORE_PASSWORD || '' }}
+          CHORDCHART_KEY_ALIAS: ${{ github.event_name != 'pull_request' && secrets.CHORDCHART_KEY_ALIAS || '' }}
+          CHORDCHART_KEY_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.CHORDCHART_KEY_PASSWORD || '' }}
+          # a tag v0.3.0 -> versionName 0.3.0
+          VERSION_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
         run: |
-          bash gradlew assembleRelease -PversionCode=${{ github.run_number }}
+          bash gradlew assembleRelease -PversionCode=${{ github.run_number }} ${VERSION_NAME:+-PversionName=${VERSION_NAME#v}}
           cp app/build/outputs/apk/release/app-release.apk ../ChordChart.apk
           ls -l ../ChordChart.apk
           rm -f release.jks

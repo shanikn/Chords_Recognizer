@@ -56,7 +56,7 @@ android {
         targetSdk = 35
         // CI passes -PversionCode=<run number>, so each build installs over the previous one.
         versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
-        versionName = "0.2.0"
+        versionName = (findProperty("versionName") as String?) ?: "0.2.0"  // CI: from a v* tag
         externalNativeBuild {
             cmake {
                 arguments += listOf("-DANDROID_STL=c++_shared")

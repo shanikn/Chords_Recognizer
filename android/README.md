@@ -22,8 +22,8 @@ The core on the PC (MSVC Build Tools 2022, the Android SDK's CMake):
     android\build\host\golden_test.exe android\app\src\main\assets\analysis android\golden
 
 The app:
-    cd android && gradlew assembleDebug      # both ABIs (phone + emulator), debug key
-    cd android && gradlew assembleRelease    # arm64 only, R8-shrunk, signed (below)
+    cd android && ./gradlew assembleDebug    # both ABIs (phone + emulator), debug key
+    cd android && ./gradlew assembleRelease  # arm64 only, R8-shrunk, signed (below)
     -> app/build/outputs/apk/{debug,release}/
 
 Release APK on your phone
@@ -50,4 +50,5 @@ For GitHub, repository Settings -> Secrets and variables -> Actions, four secret
     CHORDCHART_KEYSTORE_PASSWORD  CHORDCHART_KEY_ALIAS  CHORDCHART_KEY_PASSWORD
 
 Without a key the release build is signed with the machine's debug key, which works for a
-first install but differs between machines (and on every GitHub run).
+first install but differs between machines (and on every GitHub run). Pull request builds
+always use that throwaway key: the PR's own build scripts never get your release key.
