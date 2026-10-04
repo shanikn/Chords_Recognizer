@@ -310,7 +310,19 @@ private fun AnalyzingScreen(state: Screen.Analyzing, onCancel: () -> Unit) {
 }
 
 /** How a chord is shown: "N" (no chord) as "N.C.". */
-private fun display(symbol: String) = if (symbol == "N") "N.C." else symbol
+private fun display(symbol: String, flats: Boolean) = when {
+    symbol == "N" -> "N.C."
+    flats -> SHARP_NOTE.replace(symbol) { FLAT_OF.getValue(it.value) }
+    else -> symbol
+}
+
+/** Keys written with flats: their chords are spelled with flats too (Db, Ab, Ebm in Db major). */
+private val FLAT_KEYS = setOf(
+    "F major", "Bb major", "Eb major", "Ab major", "Db major", "Gb major",
+    "D minor", "G minor", "C minor", "F minor", "Bb minor", "Eb minor",
+)
+private val SHARP_NOTE = Regex("[ACDFG]#")
+private val FLAT_OF = mapOf("A#" to "Bb", "C#" to "Db", "D#" to "Eb", "F#" to "Gb", "G#" to "Ab")
 
 @Composable
 private fun ChartScreen(entry: History.Entry) {
@@ -341,7 +353,7 @@ private fun ChartScreen(entry: History.Entry) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 for (row in song.bars.chunked(perRow)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for (bar in row) BarCell(bar, song.meter, Modifier.weight(1f))
+                        for (bar in row) BarCell(bar, song.meter, song.keyName in FLAT_KEYS, Modifier.weight(1f))
                         repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
@@ -366,7 +378,7 @@ private fun Fact(label: String, value: String) {
 }
 
 @Composable
-private fun BarCell(bar: Song.Bar, meter: Int, modifier: Modifier) {
+private fun BarCell(bar: Song.Bar, meter: Int, flats: Boolean, modifier: Modifier) {
     Surface(
         modifier = modifier.height(52.dp),
         shape = MaterialTheme.shapes.small,
@@ -384,7 +396,7 @@ private fun BarCell(bar: Song.Bar, meter: Int, modifier: Modifier) {
                 bar.chords.forEachIndexed { i, chord ->
                     val next = bar.chords.getOrNull(i + 1)?.beat ?: maxOf(meter, chord.beat + 1)
                     Text(
-                        display(chord.symbol),
+                        display(chord.symbol, flats),
                         Modifier.weight((next - chord.beat).coerceAtLeast(1).toFloat()),
                         fontFamily = FontFamily.SansSerif,
                         fontWeight = FontWeight.SemiBold,
