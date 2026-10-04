@@ -13,8 +13,12 @@ set(CHORDCHART_ORT_LIBRARY ${ORT}/jni/${ANDROID_ABI}/libonnxruntime.so CACHE FIL
 # The analysis is numeric work: optimise it in debug builds too (a debug APK is what gets
 # sideloaded and benchmarked; -O0 made the spectrograms and the DBN several times slower).
 # -g keeps the symbols for debugging crashes.
-set(CMAKE_C_FLAGS_DEBUG "-O2 -g")
-set(CMAKE_CXX_FLAGS_DEBUG "-O2 -g")
+# Release builds (AGP uses RelWithDebInfo) get exactly the same flags, so a release APK
+# computes bit for bit what the verified debug builds do (no -O3, no NDEBUG differences).
+foreach(config DEBUG RELEASE RELWITHDEBINFO)
+    set(CMAKE_C_FLAGS_${config} "-O2 -g")
+    set(CMAKE_CXX_FLAGS_${config} "-O2 -g")
+endforeach()
 
 add_subdirectory(${ANDROID_ROOT}/core ${CMAKE_BINARY_DIR}/core)
 

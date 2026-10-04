@@ -39,6 +39,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handle(intent: Intent?) {
+        // a link shared from the YouTube or Spotify app (or a browser)
+        if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
+            intent.getStringExtra(Intent.EXTRA_TEXT)?.let(model::openLink)
+            return
+        }
         val uri: Uri? = when (intent?.action) {
             Intent.ACTION_SEND ->
                 if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)

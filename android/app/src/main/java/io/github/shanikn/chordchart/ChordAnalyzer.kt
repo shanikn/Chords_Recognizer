@@ -1,6 +1,7 @@
 package io.github.shanikn.chordchart
 
 import android.content.Context
+import androidx.core.content.pm.PackageInfoCompat
 import java.io.Closeable
 import java.io.File
 
@@ -38,7 +39,7 @@ object AnalysisAssets {
         val target = File(context.filesDir, DIR)
         val info = context.packageManager.getPackageInfo(context.packageName, 0)
         val stamp = File(target, ".version")
-        val version = "${info.longVersionCode}-${info.lastUpdateTime}"
+        val version = "${PackageInfoCompat.getLongVersionCode(info)}-${info.lastUpdateTime}"  // longVersionCode itself needs Android 9
         if (stamp.isFile && stamp.readText() == version) return target
         target.deleteRecursively()
         target.mkdirs()

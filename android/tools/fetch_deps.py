@@ -32,6 +32,8 @@ import os
 import shutil
 import sys
 import tarfile
+import time
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -92,17 +94,43 @@ def fetch(name: str, url: str) -> Path:
     if not path.exists():
         print(f"downloading {name}...", flush=True)
         partial = path.with_suffix(path.suffix + ".part")
-        with urllib.request.urlopen(url, timeout=120) as response, partial.open("wb") as out:
-            shutil.copyfileobj(response, out)
+        # android.googlesource.com builds archives on demand and answers 503 or 429 now
+        # and then (seen on GitHub's runners): try again a few times before giving up.
+        for attempt in range(5):
+            try:
+                with (
+                    urllib.request.urlopen(url, timeout=120) as response,
+                    partial.open("wb") as out,
+                ):
+                    shutil.copyfileobj(response, out)
+                break
+            except (urllib.error.URLError, TimeoutError) as error:
+                retriable = not isinstance(error, urllib.error.HTTPError) or error.code in (
+                    429,
+                    500,
+                    502,
+                    503,
+                    504,
+                )
+                if attempt == 4 or not retriable:
+                    raise
+                wait = 10 * 2**attempt
+                print(f"  {error}; retrying in {wait} s", flush=True)
+                time.sleep(wait)
         partial.replace(path)
     return path
 
 
 def tree_hash(root: Path) -> str:
-    """SHA-256 over every file's relative path and SHA-256, in sorted order."""
+    """SHA-256 over every file's relative path and SHA-256, in sorted order.
+
+    Sorted as Windows sorts paths (per part, case-insensitively), where the pinned hashes
+    were made, so the same files give the same hash on Linux too.
+    """
     digest = hashlib.sha256()
-    for path in sorted(p for p in root.rglob("*") if p.is_file()):
-        rel = path.relative_to(root).as_posix()
+    files = [p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()]
+    for rel in sorted(files, key=lambda rel: rel.lower().split("/")):
+        path = root / rel
         digest.update(f"{rel}\0{hashlib.sha256(path.read_bytes()).hexdigest()}\n".encode())
     return digest.hexdigest()
 

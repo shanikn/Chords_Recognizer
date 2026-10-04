@@ -1,0 +1,105 @@
+# Builds the Android app's release APK (arm64, signed) from a fresh clone: the C++ core's
+# third-party code (tools/fetch_deps.py), the models and tables (tools/prepare_assets.py),
+# then Gradle. The APK is attached to the run; pushing a tag v* also publishes it as a
+# GitHub release, so it can be downloaded straight onto a phone.
+#
+# Signing: with the four CHORDCHART_* secrets set (see android/README.md), every build is
+# signed with your own key and installs over the previous one. Without them it is signed
+# with the runner's throwaway debug key: installable, but not over an earlier build.
+# Pull request builds never see the key: they run the PR's own Gradle scripts (and the
+# PR's copy of this file), which could otherwise read it. The secrets live in the
+# "release" environment, which only main and v* tags may use, and PR runs don't enter it;
+# they are always signed with the throwaway debug key.
+name: Android release APK
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths: ["android/**", "chordchart/**", "uv.lock", ".github/workflows/android-release.yml"]
+  pull_request:
+    paths: ["android/**", "chordchart/**", "uv.lock", ".github/workflows/android-release.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write  # publish the release on a tag
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    environment: ${{ github.event_name != 'pull_request' && 'release' || '' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Free disk space (PyTorch and the NDK need ~15 GB)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/node_modules /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Android SDK licences (Gradle installs the platform, NDK and CMake it pins)
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - name: Python pipeline (madmom, for exporting the models)
+        run: uv sync
+
+      - name: Third-party code for the C++ core
+        run: uv run python android/tools/fetch_deps.py
+
+      - name: Models and tables
+        run: uv run --with onnx --with onnxscript python android/tools/prepare_assets.py
+
+      - name: Signing key
+        if: github.event_name != 'pull_request'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.CHORDCHART_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > android/release.jks
+            echo "CHORDCHART_KEYSTORE_FILE=release.jks" >> "$GITHUB_ENV"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "::error::A release needs the CHORDCHART_KEYSTORE_* secrets in the release environment (android/README.md)."
+            exit 1
+          else
+            echo "::warning::No CHORDCHART_KEYSTORE_BASE64 secret: signing with a throwaway debug key."
+          fi
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Build the release APK
+        working-directory: android
+        env:
+          CHORDCHART_KEYSTORE_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.CHORDCHART_KEYSTORE_PASSWORD || '' }}
+          CHORDCHART_KEY_ALIAS: ${{ github.event_name != 'pull_request' && secrets.CHORDCHART_KEY_ALIAS || '' }}
+          CHORDCHART_KEY_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.CHORDCHART_KEY_PASSWORD || '' }}
+          # a tag v0.3.0 -> versionName 0.3.0
+          VERSION_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+        run: |
+          bash gradlew assembleRelease -PversionCode=${{ github.run_number }} ${VERSION_NAME:+-PversionName=${VERSION_NAME#v}}
+          cp app/build/outputs/apk/release/app-release.apk ../ChordChart.apk
+          ls -l ../ChordChart.apk
+          rm -f release.jks
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChordChart-apk
+          path: ChordChart.apk
+
+      - name: Publish the release (tag pushes only)
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" ChordChart.apk --title "ChordChart $GITHUB_REF_NAME" --generate-notes

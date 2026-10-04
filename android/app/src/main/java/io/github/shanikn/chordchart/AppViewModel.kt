@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -16,10 +17,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.security.MessageDigest
 
 /** The stages shown while a song is analysed, in the order they finish. */
 enum class Stage(val label: String) {
+    Find("Finding it on YouTube"),
+    Download("Downloading the audio"),
     Decode("Reading the audio"),
     Beats("Finding the beats"),
     Chords("Recognizing the chords"),
@@ -32,7 +36,7 @@ sealed interface Screen {
     data object Home : Screen
     data class Analyzing(
         val title: String,
-        /** per stage: null = not started, else 0..1 */
+        /** per stage shown, in order: null = not started, else 0..1 */
         val progress: Map<Stage, Double?>,
         val startedAt: Long,
     ) : Screen
@@ -53,27 +57,105 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var job: Job? = null
     @Volatile private var session = 0L
 
+    /** A song to analyse: what it's called, and how to get its audio once it's needed. */
+    private class Source(val id: String, val title: String, val fileName: String, val decode: (progress: (Double) -> Unit) -> ShortArray)
+
     fun open(uri: Uri) {
+        val (title, fileName) = names(uri)
+        val app = getApplication<Application>()
+        start(title, emptyList()) {
+            val id = withContext(Dispatchers.IO) { hash(uri) }
+            Source(id, title, fileName) { progress -> AudioDecoder.decode(app, uri, progress) }
+        }
+    }
+
+    /** A YouTube or Spotify link, typed or shared from another app. */
+    fun openLink(text: String) {
+        val link = try {
+            LinkSource.parse(text)
+        } catch (e: LinkSource.LinkError) {
+            _screen.value = Screen.Failed("Link", e.message!!)
+            return
+        }
+        val folder = File(getApplication<Application>().cacheDir, "links").apply { mkdirs() }
+        val stages = if (link is LinkSource.Spotify) listOf(Stage.Find, Stage.Download) else listOf(Stage.Download)
+        start(if (link is LinkSource.Spotify) "Spotify song" else "YouTube video", stages) { r ->
+            val video = when (link) {
+                is LinkSource.YouTube -> link
+                is LinkSource.Spotify -> {
+                    r.progress(Stage.Find, 0.0)
+                    val match = withContext(Dispatchers.IO) {
+                        val track = LinkSource.spotifyTrack(link)
+                        r.title(if (track.artist.isNotEmpty()) "${track.artist} - ${track.title}" else track.title)
+                        LinkSource.match(track)
+                    }
+                    r.progress(Stage.Find, 1.0)
+                    LinkSource.YouTube(match.id)
+                }
+            }
+            // Keyed by the video: the same song from any link opens its chart without downloading.
+            val id = "yt-${video.videoId}"
+            history.get(id)?.let { return@start Source(id, it.title, it.fileName) { error("cached") } }
+            val audio = withContext(Dispatchers.IO) { LinkSource.audio(video) }
+            val title = if (link is LinkSource.Spotify) r.title else audio.title
+            r.title(title)
+            Source(id, title, video.url) { progress ->
+                val file = File(folder, "${video.videoId}.${audio.suffix}")
+                try {
+                    r.progress(Stage.Download, 0.0)
+                    LinkSource.download(audio, file) { r.progress(Stage.Download, it) }
+                    AudioDecoder.decode(file.path, progress)
+                } finally {
+                    file.delete()
+                }
+            }
+        }
+    }
+
+    /** Lets a source's preparation update what the analysing screen shows. */
+    private interface Reporter {
+        val title: String
+        fun title(title: String)
+        fun progress(stage: Stage, fraction: Double)
+    }
+
+    private fun start(initialTitle: String, before: List<Stage>, prepare: suspend CoroutineScope.(Reporter) -> Source) {
         job?.cancel()
         job = viewModelScope.launch(Dispatchers.Default) {
-            val app = getApplication<Application>()
-            val (title, fileName) = names(uri)
+            var title = initialTitle
             val started = System.currentTimeMillis()
-            val progress = Stage.entries.associateWith<Stage, Double?> { null }.toMutableMap()
+            val stages = before + Stage.entries.filter { it >= Stage.Decode }
+            val progress = stages.associateWith<Stage, Double?> { null }.toMutableMap()
             fun show() {
                 _screen.value = Screen.Analyzing(title, progress.toMap(), started)
             }
+            val scope = this
+            val getTitle = { title }
+            val setTitle = { t: String -> title = t }
+            val reporter = object : Reporter {
+                override val title get() = getTitle()
+                override fun title(title: String) = update { setTitle(title) }
+                override fun progress(stage: Stage, fraction: Double) = update { progress[stage] = fraction }
+                private fun update(change: () -> Unit) {
+                    scope.ensureActive()
+                    change()
+                    show()
+                }
+            }
             show()
             try {
-                val id = withContext(Dispatchers.IO) { hash(uri) }
-                history.get(id)?.let {
+                val source = this.prepare(reporter)
+                title = source.title
+                history.get(source.id)?.let {
                     _screen.value = Screen.Chart(it, fromHistory = true)
                     return@launch
                 }
-                progress[Stage.Decode] = 0.0
-                show()
+                if (Stage.Download !in progress) {  // a link's download goes first
+                    progress[Stage.Decode] = 0.0
+                    show()
+                }
                 val pcm = withContext(Dispatchers.IO) {
-                    AudioDecoder.decode(app, uri) { f ->
+                    source.decode { f ->
                         ensureActive()
                         progress[Stage.Decode] = f
                         show()
@@ -101,7 +183,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     session = 0L
                     Native.releaseSession(s)
                 }
-                val entry = History.Entry(id, title, fileName, System.currentTimeMillis(), json)
+                val entry = History.Entry(source.id, title, source.fileName, System.currentTimeMillis(), json)
                 history.save(entry)
                 _entries.value = history.all()
                 _screen.value = Screen.Chart(entry, fromHistory = false)
@@ -109,12 +191,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (_screen.value is Screen.Analyzing) _screen.value = Screen.Home
             } catch (e: AnalysisException) {
                 _screen.value = Screen.Failed(title, e.message ?: "the analysis failed")
+            } catch (e: LinkSource.LinkError) {
+                _screen.value = Screen.Failed(title, e.message!!)
             } catch (e: AudioDecoder.Unsupported) {
                 _screen.value = Screen.Failed(title, e.message ?: "this file can't be read")
             } catch (e: SecurityException) {
-                _screen.value = Screen.Failed(title, "ChordChart wasn't allowed to open this file. Try \"Choose a song\" instead.")
+                _screen.value = Screen.Failed(title, "Chord Chart wasn't allowed to open this file. Try \"Upload a song\" instead.")
             } catch (e: java.io.FileNotFoundException) {
                 _screen.value = Screen.Failed(title, "The file isn't there any more.")
+            } catch (e: java.net.UnknownHostException) {
+                _screen.value = Screen.Failed(title, "No internet connection. Links need one; songs on the phone don't.")
+            } catch (e: java.io.IOException) {
+                _screen.value = Screen.Failed(title, "The download failed: ${e.message ?: e.javaClass.simpleName}. Check the internet connection and try again.")
             } catch (e: Exception) {
                 _screen.value = Screen.Failed(title, "Something went wrong: ${e.message ?: e.javaClass.simpleName}")
             }
