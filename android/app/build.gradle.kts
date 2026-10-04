@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -30,6 +32,19 @@ val copyDecoderLicenses = tasks.register<Copy>("copyDecoderLicenses") {
     from(File(thirdParty, "aosp-mp3dec/patent_disclaimer.txt")) { rename { "Android codecs patent disclaimer.txt" } }
 }
 
+// Release signing: a keystore of your own, so every release APK can be installed over the
+// last one. Read from android/keystore.properties (git-ignored; see android/README.md) or,
+// on CI, from CHORDCHART_KEYSTORE_* environment variables. Without either, the release
+// build is signed with this machine's debug key: installable, but a different machine's
+// build can't be installed over it.
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.isFile) f.inputStream().use { load(it) }
+}
+fun signingValue(prop: String, env: String): String? =
+    keystoreProps.getProperty(prop) ?: System.getenv(env)?.takeIf { it.isNotEmpty() }
+val releaseStoreFile = signingValue("storeFile", "CHORDCHART_KEYSTORE_FILE")
+
 android {
     namespace = "io.github.shanikn.chordchart"
     compileSdk = 37
@@ -39,12 +54,9 @@ android {
         applicationId = "io.github.shanikn.chordchart"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
-        ndk {
-            // real phones, and the x86_64 emulator
-            abiFilters += listOf("arm64-v8a", "x86_64")
-        }
+        // CI passes -PversionCode=<run number>, so each build installs over the previous one.
+        versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
+        versionName = "0.2.0"
         externalNativeBuild {
             cmake {
                 arguments += listOf("-DANDROID_STL=c++_shared")
@@ -67,9 +79,29 @@ android {
         }
     }
 
+    signingConfigs {
+        if (releaseStoreFile != null) {
+            create("release") {
+                storeFile = rootProject.file(releaseStoreFile)
+                storePassword = signingValue("storePassword", "CHORDCHART_KEYSTORE_PASSWORD")
+                keyAlias = signingValue("keyAlias", "CHORDCHART_KEY_ALIAS")
+                keyPassword = signingValue("keyPassword", "CHORDCHART_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
+        getByName("debug") {
+            // real phones, and the x86_64 emulator
+            ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        }
         getByName("release") {
-            isMinifyEnabled = false
+            // real phones only: the APK is about half the size without the emulator's ABI
+            ndk { abiFilters += listOf("arm64-v8a") }
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 

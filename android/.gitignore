@@ -9,3 +9,8 @@ local.properties
 .idea/
 app/build/
 .cxx/
+
+# release signing (see README.md); never commit
+keystore.properties
+*.jks
+*.keystore
