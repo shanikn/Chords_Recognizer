@@ -45,11 +45,8 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Android SDK packages (platform, NDK, CMake the build pins)
-        run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-            "platforms;android-37" "ndk;29.0.14206865" "cmake;3.31.6" > /dev/null
+      - name: Android SDK licences (Gradle installs the platform, NDK and CMake it pins)
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
       - name: Python pipeline (madmom, for exporting the models)
         run: uv sync
