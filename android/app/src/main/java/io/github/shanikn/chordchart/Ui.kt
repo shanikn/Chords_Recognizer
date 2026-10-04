@@ -1,9 +1,18 @@
 package io.github.shanikn.chordchart
 
-import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -29,7 +38,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -41,8 +49,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -70,15 +76,27 @@ import kotlinx.coroutines.delay
 import java.text.DateFormat
 import java.util.Date
 
+/** Cobalt blue throughout (not the phone's wallpaper colours), light and dark. */
+private val CobaltLight = lightColorScheme(
+    primary = Color(0xFF0047AB), onPrimary = Color.White,
+    primaryContainer = Color(0xFFD8E2FF), onPrimaryContainer = Color(0xFF001A42),
+    secondary = Color(0xFF3F5F90), onSecondary = Color.White,
+    secondaryContainer = Color(0xFFD6E3FF), onSecondaryContainer = Color(0xFF001B3D),
+    tertiary = Color(0xFF00658E), onTertiary = Color.White,
+    surfaceVariant = Color(0xFFE0E2EC), outlineVariant = Color(0xFFC4C6D0),
+)
+private val CobaltDark = darkColorScheme(
+    primary = Color(0xFFADC6FF), onPrimary = Color(0xFF002E6A),
+    primaryContainer = Color(0xFF0047AB), onPrimaryContainer = Color(0xFFD8E2FF),
+    secondary = Color(0xFFA8C8FF), onSecondary = Color(0xFF07305F),
+    secondaryContainer = Color(0xFF254777), onSecondaryContainer = Color(0xFFD6E3FF),
+    tertiary = Color(0xFF7FD0FF), onTertiary = Color(0xFF00344B),
+    surfaceVariant = Color(0xFF44474F), outlineVariant = Color(0xFF44474F),
+)
+
 @Composable
 fun ChordChartTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
-    val context = LocalContext.current
-    val colors = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        dark -> darkColorScheme()
-        else -> lightColorScheme()
-    }
+    val colors = if (isSystemInDarkTheme()) CobaltDark else CobaltLight
     MaterialTheme(colorScheme = colors) { Surface(Modifier.fillMaxSize(), content = content) }
 }
 
@@ -256,15 +274,10 @@ private fun AnalyzingScreen(state: Screen.Analyzing, onCancel: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Text("Working it out…", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(16.dp))
-        LinearProgressIndicator(
-            progress = { overall },
-            modifier = Modifier.fillMaxWidth().height(8.dp),
-            gapSize = 0.dp,
-            drawStopIndicator = {},
-        )
+        ProgressBar(overall)
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth()) {
-            Text("${(reached * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
+            Text("${(reached * 100).toInt()}%", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
             Text(
                 formatDuration((now - state.startedAt) / 1000.0),
@@ -278,17 +291,18 @@ private fun AnalyzingScreen(state: Screen.Analyzing, onCancel: () -> Unit) {
             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
                     when {
-                        p == null -> Text("○", color = MaterialTheme.colorScheme.outline)
-                        p >= 1.0 -> Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        p == null -> PendingDot()
+                        p >= 1.0 -> DoneCheck()
                         // Until a stage reports progress it spins; then the ring fills with it.
-                        p <= 0.0 -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                        p <= 0.0 -> CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.5.dp, strokeCap = StrokeCap.Round)
                         else -> {
                             val ring by animateFloatAsState(p.toFloat(), tween(durationMillis = 400), label = "stage")
                             CircularProgressIndicator(
                                 progress = { ring },
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(22.dp),
+                                strokeWidth = 2.5.dp,
                                 trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                strokeCap = StrokeCap.Round,
                                 gapSize = 0.dp,
                             )
                         }
@@ -306,6 +320,49 @@ private fun AnalyzingScreen(state: Screen.Analyzing, onCancel: () -> Unit) {
         }
         Spacer(Modifier.weight(1f))
         OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+    }
+}
+
+/** A thick, fully rounded bar: the filled part in the theme colour on a soft track. */
+@Composable
+private fun ProgressBar(fraction: Float) {
+    val track = MaterialTheme.colorScheme.surfaceVariant
+    val fill = MaterialTheme.colorScheme.primary
+    Canvas(Modifier.fillMaxWidth().height(14.dp)) {
+        val r = CornerRadius(size.height / 2)
+        drawRoundRect(track, cornerRadius = r)
+        val w = size.width * fraction.coerceIn(0f, 1f)
+        // never thinner than the bar is tall, so the start is a round dot rather than a sliver
+        if (w > 0f) drawRoundRect(fill, size = Size(maxOf(w, size.height), size.height), cornerRadius = r)
+    }
+}
+
+/** A step not started yet: an empty circle. */
+@Composable
+private fun PendingDot() {
+    val color = MaterialTheme.colorScheme.outlineVariant
+    Canvas(Modifier.size(22.dp)) {
+        drawCircle(color, radius = size.minDimension / 2 - 1.dp.toPx(), style = Stroke(2.dp.toPx()))
+    }
+}
+
+/** A finished step: a white check in a filled circle, popping in when the step finishes. */
+@Composable
+private fun DoneCheck() {
+    val circle = MaterialTheme.colorScheme.primary
+    val tick = MaterialTheme.colorScheme.onPrimary
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { shown = true }
+    val scale by animateFloatAsState(if (shown) 1f else 0.4f, spring(dampingRatio = 0.5f), label = "check")
+    Canvas(Modifier.size(22.dp).graphicsLayer { scaleX = scale; scaleY = scale }) {
+        drawCircle(circle)
+        val s = size.minDimension
+        val path = Path().apply {
+            moveTo(s * 0.28f, s * 0.52f)
+            lineTo(s * 0.44f, s * 0.67f)
+            lineTo(s * 0.73f, s * 0.36f)
+        }
+        drawPath(path, tick, style = Stroke(width = s * 0.11f, cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
 }
 
