@@ -27,6 +27,7 @@ val decoderLicenses = layout.buildDirectory.dir("generated/licenses")
 val copyDecoderLicenses = tasks.register<Copy>("copyDecoderLicenses") {
     val thirdParty = rootProject.file("third_party")
     into(decoderLicenses.map { it.dir("licenses") })
+    from(rootProject.file("LICENSE")) { rename { "GNU General Public License 3.0.txt" } }
     from(File(thirdParty, "aosp-aac/NOTICE")) { rename { "Fraunhofer FDK AAC.txt" } }
     from(File(thirdParty, "aosp-mp3dec/NOTICE")) { rename { "Android Open Source Project (Apache-2.0).txt" } }
     from(File(thirdParty, "aosp-mp3dec/patent_disclaimer.txt")) { rename { "Android codecs patent disclaimer.txt" } }
@@ -56,12 +57,16 @@ android {
         targetSdk = 35
         // CI passes -PversionCode=<run number>, so each build installs over the previous one.
         versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
-        versionName = (findProperty("versionName") as String?) ?: "0.2.0"  // CI: from a v* tag
+        versionName = (findProperty("versionName") as String?) ?: "0.3.0"  // CI: from a v* tag
         externalNativeBuild {
             cmake {
                 arguments += listOf("-DANDROID_STL=c++_shared")
             }
         }
+    }
+
+    compileOptions {
+        isCoreLibraryDesugaringEnabled = true
     }
 
     externalNativeBuild {
@@ -132,4 +137,8 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.core:core-ktx:1.17.0")
+    // YouTube and Spotify links (GPL-3.0; the commit NewPipe itself builds with)
+    implementation("com.github.TeamNewPipe:NewPipeExtractor:13a655fe53e0c3065f88725fc1fb594c3ede0169")
+    // java.time and java.nio for NewPipe Extractor on Android 7
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
 }

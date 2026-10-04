@@ -147,12 +147,12 @@ shrinking it would change the beats, so it stays.)
 | pocketfft | BSD-3-Clause | Notice. |
 | libsoxr | **LGPL-2.1** | Fine in a free or closed app when linked dynamically (it's its own `.so`); include the license and its source (or a written offer). Not GPL. |
 | Kotlin, Jetpack Compose, AndroidX | Apache-2.0 | Notice. |
-| Phase 3, YouTube via NewPipe Extractor | **GPL-3.0** | The whole app would have to be distributed under GPL-3.0. Separately, Google Play forbids apps that download YouTube content, so it would be a sideload-only build. Details before that phase. |
+| YouTube and Spotify links via NewPipe Extractor (added) | **GPL-3.0** | The whole app is now distributed under GPL-3.0 or later (android/LICENSE, shown on the About screen). Google Play forbids apps that download YouTube content, so it is a sideload-only app. The madmom models stay CC BY-NC-SA 4.0 data files. |
 | Phase 3, basic-pitch | Apache-2.0 (code and model) | Notice. |
 | Phase 3, Demucs (htdemucs) | MIT | Notice (feasibility on a phone is the real question). |
 | Phase 3, OpenSheetMusicDisplay | BSD-3-Clause | Notice. |
 
-Nothing GPL in Phases 0-2. No FFmpeg in the app (MediaCodec decodes), which avoids its
+Nothing GPL in Phases 0-2; NewPipe Extractor (above) made the app GPL-3.0. No FFmpeg in the app (MediaCodec decodes), which avoids its
 LGPL/GPL build questions.
 
 ## 6. Time and memory estimate: a 4-minute song on a mid-range 6 GB phone

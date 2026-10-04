@@ -1,3 +1,5 @@
+ChordChart for Android is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License, version 3 or (at your option) any later version, because it includes NewPipe Extractor (GPL-3.0). It comes with no warranty. Full text below. Source code: https://github.com/shanikn/Chords_Recognizer
+
 Third-party software and models in this app
 
 madmom (CPJKU): chord and key recognition models, and the beat-to-bar tracking (DBN). Code: BSD 2-Clause License. Model files: Creative Commons BY-NC-SA 4.0, so this app is for non-commercial use only. https://github.com/CPJKU/madmom
@@ -17,3 +19,15 @@ Fraunhofer FDK AAC Codec Library for Android (Fraunhofer IIS): decoding AAC. Use
 Opus (Xiph.Org Foundation and contributors): decoding WebM and Ogg Opus audio. BSD 3-Clause License. https://opus-codec.org
 
 Jetpack Compose and AndroidX (Google): the user interface. Apache License 2.0.
+
+NewPipe Extractor (Team NewPipe): reading YouTube links, searching YouTube for a Spotify track, and finding the audio to download. GNU GPL 3.0 or later. https://github.com/TeamNewPipe/NewPipeExtractor
+
+Rhino (Mozilla): runs YouTube's player code for NewPipe Extractor. Mozilla Public License 2.0. https://github.com/mozilla/rhino
+
+jsoup (Jonathan Hedley): HTML parsing. MIT License. https://jsoup.org
+
+nanojson (Matt Mastracci; Team NewPipe fork): JSON parsing. Apache License 2.0 or MIT License. https://github.com/TeamNewPipe/nanojson
+
+Protocol Buffers (Google): YouTube request encoding. BSD 3-Clause License. https://github.com/protocolbuffers/protobuf
+
+Java library desugaring (Google): newer Java APIs on older Android. GNU GPL 2.0 with the Classpath Exception. https://github.com/google/desugar_jdk_libs

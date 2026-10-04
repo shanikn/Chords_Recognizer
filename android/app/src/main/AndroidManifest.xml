@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- No INTERNET permission: the app works fully offline. -->
+    <!-- Only for YouTube and Spotify links: songs on the phone are analysed offline. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="@string/app_name"
         android:allowBackup="false"
@@ -14,12 +15,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Share a song to ChordChart, or open one with it -->
+            <!-- Share a song (or a YouTube or Spotify link) to ChordChart, or open one with it -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="audio/*" />
                 <data android:mimeType="video/*" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

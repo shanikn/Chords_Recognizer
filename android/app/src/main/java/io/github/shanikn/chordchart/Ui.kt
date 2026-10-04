@@ -29,7 +29,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -46,13 +49,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -108,7 +115,7 @@ fun App(
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
             when (screen) {
-                Screen.Home -> HomeScreen(entries, onPick, model::show, model::delete)
+                Screen.Home -> HomeScreen(entries, onPick, model::openLink, model::show, model::delete)
                 is Screen.Analyzing -> AnalyzingScreen(screen, model::cancel)
                 is Screen.Chart -> ChartScreen(screen.entry)
                 is Screen.Failed -> FailedScreen(screen, onPick)
@@ -123,10 +130,13 @@ fun App(
 private fun HomeScreen(
     entries: List<History.Entry>,
     onPick: () -> Unit,
+    onLink: (String) -> Unit,
     onOpen: (History.Entry) -> Unit,
     onDelete: (History.Entry) -> Unit,
 ) {
     var confirm by remember { mutableStateOf<History.Entry?>(null) }
+    var link by rememberSaveable { mutableStateOf("") }
+    val clipboard = LocalClipboardManager.current
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
         item {
             Text(
@@ -140,6 +150,37 @@ private fun HomeScreen(
             Spacer(Modifier.height(8.dp))
             Text(
                 "Or share an audio or video file to ChordChart from another app.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(24.dp))
+            OutlinedTextField(
+                value = link,
+                onValueChange = { link = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("YouTube or Spotify link") },
+                placeholder = { Text("https://youtu.be/…") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
+                keyboardActions = KeyboardActions(onGo = { if (link.isNotBlank()) onLink(link.trim()) }),
+                trailingIcon = {
+                    if (link.isEmpty()) {
+                        TextButton(onClick = { clipboard.getText()?.text?.let { link = it.trim() } }) { Text("Paste") }
+                    } else {
+                        TextButton(onClick = { link = "" }) { Text("Clear") }
+                    }
+                },
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { onLink(link.trim()) },
+                enabled = link.isNotBlank(),
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+            ) { Text("Chart this link") }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Or share a video or song to ChordChart from the YouTube or Spotify app. " +
+                    "The audio is downloaded, then analysed on this phone.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -183,7 +224,7 @@ private fun HomeScreen(
 
 /** Rough share of the total time per stage (emulator timings), for the overall bar. */
 private val STAGE_WEIGHT = mapOf(
-    Stage.Decode to 0.10, Stage.Beats to 0.60, Stage.Chords to 0.20,
+    Stage.Find to 0.05, Stage.Download to 0.15, Stage.Decode to 0.10, Stage.Beats to 0.60, Stage.Chords to 0.20,
     Stage.Key to 0.04, Stage.Bars to 0.03, Stage.Chart to 0.03,
 )
 
@@ -202,7 +243,8 @@ private fun AnalyzingScreen(state: Screen.Analyzing, onCancel: () -> Unit) {
             delay(250)
         }
     }
-    val overall = STAGE_WEIGHT.entries.sumOf { (stage, w) -> w * (state.progress[stage] ?: 0.0) }
+    val shown = state.progress.keys
+    val overall = shown.sumOf { STAGE_WEIGHT.getValue(it) * (state.progress[it] ?: 0.0) } / shown.sumOf { STAGE_WEIGHT.getValue(it) }
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Text("Working it out…", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(16.dp))
@@ -218,7 +260,7 @@ private fun AnalyzingScreen(state: Screen.Analyzing, onCancel: () -> Unit) {
             )
         }
         Spacer(Modifier.height(24.dp))
-        for (stage in Stage.entries) {
+        for (stage in shown) {
             val p = state.progress[stage]
             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
@@ -358,8 +400,10 @@ private fun AboutScreen() {
         Text("ChordChart $version", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Works fully offline: songs are analysed on the phone and never leave it. " +
-                "Charts are kept on the phone until you delete them.",
+            "Songs are analysed on the phone and never leave it. The internet is used only for " +
+                "YouTube and Spotify links: to read the link and download the song's audio (from " +
+                "YouTube; for a Spotify link, the same recording found on YouTube, since Spotify's " +
+                "own audio is never used). Charts are kept on the phone until you delete them.",
             style = MaterialTheme.typography.bodyMedium,
         )
         Spacer(Modifier.height(16.dp))
