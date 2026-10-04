@@ -30,7 +30,7 @@ Release APK on your phone
 -------------------------
 GitHub builds it: Actions -> "Android release APK" runs on every push to main that touches
 the app (or Run workflow by hand) and attaches ChordChart.apk to the run. Pushing a tag
-such as v0.2.0 also publishes it as a GitHub release; open that page on the phone,
+such as v0.2.0 also publishes it as a GitHub release (this needs your key, below); open that page on the phone,
 download the APK, and allow installing from your browser when Android asks.
 
 Sign every build with the same key, or Android refuses to install a new one over the old
