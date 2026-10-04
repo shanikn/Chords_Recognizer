@@ -5,14 +5,16 @@ A standalone Android app that runs ChordChart's whole chord analysis on the phon
 PC, server or Python). Songs come from the phone, or from a YouTube or Spotify link (the
 audio is downloaded with NewPipe Extractor; a Spotify track is matched to the same
 recording on YouTube, as on the desktop). Licensed GPL-3.0-or-later (LICENSE), because
-of NewPipe Extractor; sideload only, since Google Play doesn't allow YouTube downloads. Work in progress, in phases; see docs/PHASE0.md for the stack,
+of NewPipe Extractor. Two builds: "full", the sideload APK with links, and "play", for
+Google Play, which doesn't allow YouTube downloads: songs from the phone only, no
+internet permission (docs/play/README.md). Work in progress, in phases; see docs/PHASE0.md for the stack,
 the verified ONNX models, the plan for exact reimplementation, licenses and estimates.
 
     core/     the analysis in platform-independent C++ (also builds on the PC; no Android
               code): spectrograms, Beat This!, the DBN, the CRF, the chart
     app/src/main/assets/analysis/   ONNX models and constant tables the core loads
     tools/    Python: exports and checks against the desktop pipeline
-    docs/     PHASE0.md, PHASE1.md
+    docs/     PHASE0.md, PHASE1.md; play/ for the Google Play listing
 
 Setup:
     uv run python android/tools/fetch_deps.py        # pocketfft, libsoxr, ONNX Runtime -> third_party/
@@ -25,14 +27,17 @@ The core on the PC (MSVC Build Tools 2022, the Android SDK's CMake):
     android\build\host\golden_test.exe android\app\src\main\assets\analysis android\golden
 
 The app:
-    cd android && ./gradlew assembleDebug    # both ABIs (phone + emulator), debug key
-    cd android && ./gradlew assembleRelease  # arm64 only, R8-shrunk, signed (below)
-    -> app/build/outputs/apk/{debug,release}/
+    cd android && ./gradlew assembleFullDebug    # both ABIs (phone + emulator), debug key
+    cd android && ./gradlew assembleFullRelease  # arm64 only, R8-shrunk, signed (below)
+    -> app/build/outputs/apk/full/{debug,release}/
+    cd android && ./gradlew bundlePlayRelease    # the Google Play bundle (.aab), signed
+    -> app/build/outputs/bundle/playRelease/
 
 Release APK on your phone
 -------------------------
-GitHub builds it: Actions -> "Android release APK" runs on every push to main that touches
-the app (or Run workflow by hand) and attaches ChordChart.apk to the run. Pushing a tag
+GitHub builds it: Actions -> "Android release APK and Play bundle" runs on every push to
+main that touches the app (or Run workflow by hand) and attaches ChordChart.apk (and
+ChordChart-play.aab, for Google Play) to the run. Pushing a tag
 such as v0.2.0 also publishes it as a GitHub release (this needs your key, below); open that page on the phone,
 download the APK, and allow installing from your browser when Android asks.
 

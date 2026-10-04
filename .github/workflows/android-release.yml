@@ -1,7 +1,11 @@
-# Builds the Android app's release APK (arm64, signed) from a fresh clone: the C++ core's
-# third-party code (tools/fetch_deps.py), the models and tables (tools/prepare_assets.py),
-# then Gradle. The APK is attached to the run; pushing a tag v* also publishes it as a
-# GitHub release, so it can be downloaded straight onto a phone.
+# Builds the Android app's two release builds (arm64, signed) from a fresh clone: the C++
+# core's third-party code (tools/fetch_deps.py), the models and tables
+# (tools/prepare_assets.py), then Gradle:
+#   ChordChart.apk           the sideload build (with YouTube and Spotify links); pushing a
+#                            tag v* also publishes it as a GitHub release, so it can be
+#                            downloaded straight onto a phone
+#   ChordChart-play.aab      the Google Play build (no links), to upload in the Play Console
+# Both are attached to the run.
 #
 # Signing: with the four CHORDCHART_* secrets set (see android/README.md), every build is
 # signed with your own key and installs over the previous one. Without them it is signed
@@ -10,7 +14,7 @@
 # PR's copy of this file), which could otherwise read it. The secrets live in the
 # "release" environment, which only main and v* tags may use, and PR runs don't enter it;
 # they are always signed with the throwaway debug key.
-name: Android release APK
+name: Android release APK and Play bundle
 
 on:
   push:
@@ -79,7 +83,7 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v5
 
-      - name: Build the release APK
+      - name: Build the release APK and the Play bundle
         working-directory: android
         env:
           CHORDCHART_KEYSTORE_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.CHORDCHART_KEYSTORE_PASSWORD || '' }}
@@ -88,15 +92,24 @@ jobs:
           # a tag v0.3.0 -> versionName 0.3.0
           VERSION_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
         run: |
-          bash gradlew assembleRelease -PversionCode=${{ github.run_number }} ${VERSION_NAME:+-PversionName=${VERSION_NAME#v}}
-          cp app/build/outputs/apk/release/app-release.apk ../ChordChart.apk
-          ls -l ../ChordChart.apk
+          bash gradlew assembleFullRelease bundlePlayRelease -PversionCode=${{ github.run_number }} ${VERSION_NAME:+-PversionName=${VERSION_NAME#v}}
+          cp app/build/outputs/apk/full/release/app-full-release.apk ../ChordChart.apk
+          cp app/build/outputs/bundle/playRelease/app-play-release.aab ../ChordChart-play.aab
+          ls -l ../ChordChart.apk ../ChordChart-play.aab
           rm -f release.jks
+
+      - name: Native libraries are 16 KB-aligned (Google Play requires it)
+        run: python3 android/tools/check_page_size.py ChordChart-play.aab
 
       - uses: actions/upload-artifact@v4
         with:
           name: ChordChart-apk
           path: ChordChart.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChordChart-play-aab
+          path: ChordChart-play.aab
 
       - name: Publish the release (tag pushes only)
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')

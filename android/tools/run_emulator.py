@@ -40,7 +40,7 @@ PACKAGE = "io.github.shanikn.chordchart"
 # storage belong to adb's user, and the app may not read them.
 DEVICE_DIR = f"/data/user/0/{PACKAGE}/files"
 ADB = Path(os.environ.get("LOCALAPPDATA", "")) / "Android" / "Sdk" / "platform-tools" / "adb.exe"
-APK = ANDROID / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
+APK = ANDROID / "app" / "build" / "outputs" / "apk" / "full" / "debug" / "app-full-debug.apk"  # assembleFullDebug
 OUT = ANDROID / "build" / "emulator"
 GOLDEN = ANDROID / "golden"
 
