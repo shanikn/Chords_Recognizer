@@ -2,6 +2,8 @@ package io.github.shanikn.chordchart
 
 import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -46,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -244,14 +247,24 @@ private fun AnalyzingScreen(state: Screen.Analyzing, onCancel: () -> Unit) {
         }
     }
     val shown = state.progress.keys
-    val overall = shown.sumOf { STAGE_WEIGHT.getValue(it) * (state.progress[it] ?: 0.0) } / shown.sumOf { STAGE_WEIGHT.getValue(it) }
+    val target = shown.sumOf { STAGE_WEIGHT.getValue(it) * (state.progress[it] ?: 0.0) } / shown.sumOf { STAGE_WEIGHT.getValue(it) }
+    // Progress arrives in steps (and stages run in parallel), so the bar glides to each new
+    // value instead of jumping, and never moves backwards.
+    var reached by remember { mutableFloatStateOf(0f) }
+    reached = maxOf(reached, target.toFloat())
+    val overall by animateFloatAsState(reached, tween(durationMillis = 600), label = "overall")
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Text("Working it out…", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(16.dp))
-        LinearProgressIndicator(progress = { overall.toFloat() }, modifier = Modifier.fillMaxWidth().height(8.dp))
+        LinearProgressIndicator(
+            progress = { overall },
+            modifier = Modifier.fillMaxWidth().height(8.dp),
+            gapSize = 0.dp,
+            drawStopIndicator = {},
+        )
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth()) {
-            Text("${(overall * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
+            Text("${(reached * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.weight(1f))
             Text(
                 formatDuration((now - state.startedAt) / 1000.0),
@@ -267,7 +280,18 @@ private fun AnalyzingScreen(state: Screen.Analyzing, onCancel: () -> Unit) {
                     when {
                         p == null -> Text("○", color = MaterialTheme.colorScheme.outline)
                         p >= 1.0 -> Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                        else -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                        // Until a stage reports progress it spins; then the ring fills with it.
+                        p <= 0.0 -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                        else -> {
+                            val ring by animateFloatAsState(p.toFloat(), tween(durationMillis = 400), label = "stage")
+                            CircularProgressIndicator(
+                                progress = { ring },
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                gapSize = 0.dp,
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.width(12.dp))
