@@ -17,7 +17,8 @@ the Google Play version doesn't have permission to use the internet at all.
   tempo and when it was analysed) are saved in the app's private storage on your phone,
   so you can open them again. Delete one from the app's home screen, or remove them all
   by uninstalling the app or clearing its storage in Android's settings. They are not
-  included in Android backups.
+  included in Android's cloud backups, though some phones may copy app data, charts
+  included, when you move to a new phone with a cable or a direct transfer.
 
 ## Sharing
 

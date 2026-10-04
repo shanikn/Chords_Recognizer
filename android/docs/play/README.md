@@ -41,8 +41,10 @@ Files here:
 7. **Closed test (required for new personal accounts).** Testing, Closed testing:
    create a track, upload the .aab, add at least **12 testers** (their Google account
    emails, or a Google Group), and share the opt-in link with them. They must stay
-   opted in for **14 days in a row**. Friends who install it and open it a few times are
-   enough; feedback helps the production review.
+   opted in for **14 days in a row**. Ask them to really use it (chart a few of their
+   own songs) and send you what goes wrong: Google asks about the test when you apply
+   for production, and meeting the 12-testers/14-days rule doesn't by itself guarantee
+   approval.
 8. **Apply for production** (Dashboard, after the 14 days), answer the short
    questionnaire about the test, then create a production release with the same .aab
    (or a newer one). Review usually takes a few days.
