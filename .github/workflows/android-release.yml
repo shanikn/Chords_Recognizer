@@ -2,8 +2,9 @@
 # core's third-party code (tools/fetch_deps.py), the models and tables
 # (tools/prepare_assets.py), then Gradle:
 #   ChordChart.apk           the sideload build (with YouTube and Spotify links); pushing a
-#                            tag v* also publishes it as a GitHub release, so it can be
-#                            downloaded straight onto a phone
+#                            tag v* (or Run workflow on main with a release tag such as
+#                            v0.3.0, which creates the tag) also publishes it as a GitHub
+#                            release, so it can be downloaded straight onto a phone
 #   ChordChart-play.aab      the Google Play build (no links), to upload in the Play Console
 # Both are attached to the run.
 #
@@ -24,6 +25,11 @@ on:
   pull_request:
     paths: ["android/**", "chordchart/**", "uv.lock", ".github/workflows/android-release.yml"]
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Publish a GitHub release with this new tag, such as v0.3.0 (main only; empty: just build)"
+        required: false
+        default: ""
 
 permissions:
   contents: write  # publish the release on a tag
@@ -37,6 +43,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     environment: ${{ github.event_name != 'pull_request' && 'release' || '' }}
+    env:
+      # the release this run publishes: the pushed tag, or Run workflow's input; empty: none
+      RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || (github.event_name == 'workflow_dispatch' && inputs.release || '') }}
     steps:
       - uses: actions/checkout@v5
 
@@ -74,7 +83,7 @@ jobs:
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > android/release.jks
             echo "CHORDCHART_KEYSTORE_FILE=release.jks" >> "$GITHUB_ENV"
-          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          elif [ -n "$RELEASE_TAG" ]; then
             echo "::error::A release needs the CHORDCHART_KEYSTORE_* secrets in the release environment (android/README.md)."
             exit 1
           else
@@ -90,7 +99,7 @@ jobs:
           CHORDCHART_KEY_ALIAS: ${{ github.event_name != 'pull_request' && secrets.CHORDCHART_KEY_ALIAS || '' }}
           CHORDCHART_KEY_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.CHORDCHART_KEY_PASSWORD || '' }}
           # a tag v0.3.0 -> versionName 0.3.0
-          VERSION_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+          VERSION_NAME: ${{ env.RELEASE_TAG }}
         run: |
           bash gradlew assembleFullRelease bundlePlayRelease -PversionCode=${{ github.run_number }} ${VERSION_NAME:+-PversionName=${VERSION_NAME#v}}
           cp app/build/outputs/apk/full/release/app-full-release.apk ../ChordChart.apk
@@ -111,8 +120,21 @@ jobs:
           name: ChordChart-play-aab
           path: ChordChart-play.aab
 
-      - name: Publish the release (tag pushes only)
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+      - name: Publish the release (a v* tag, or Run workflow with a release tag)
+        if: env.RELEASE_TAG != ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" ChordChart.apk --title "ChordChart $GITHUB_REF_NAME" --generate-notes
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+(\.[0-9]+)*$ ]]; then
+            echo "::error::Release tags look like v0.3.0, not '$RELEASE_TAG'."; exit 1
+          fi
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::Run the workflow on main to publish a release."; exit 1
+          fi
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            # made on github.com (Releases -> Draft a new release): add the APK to it
+            gh release upload "$RELEASE_TAG" ChordChart.apk --clobber
+          else
+            # creates the tag on this commit when it doesn't exist yet
+            gh release create "$RELEASE_TAG" ChordChart.apk --target "$GITHUB_SHA" --title "ChordChart $RELEASE_TAG" --generate-notes
+          fi

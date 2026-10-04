@@ -38,9 +38,10 @@ Release APK on your phone
 -------------------------
 GitHub builds it: Actions -> "Android release APK and Play bundle" runs on every push to
 main that touches the app (or Run workflow by hand) and attaches ChordChart.apk (and
-ChordChart-play.aab, for Google Play) to the run. Pushing a tag
-such as v0.2.0 also publishes it as a GitHub release (this needs your key, below); open that page on the phone,
-download the APK, and allow installing from your browser when Android asks.
+ChordChart-play.aab, for Google Play) to the run. To publish it as a GitHub release (this
+needs your key, below), push a tag such as v0.3.0, or Run workflow on main with the release
+tag filled in; open the release page on the phone, download the APK, and allow installing
+from your browser when Android asks.
 
 Sign every build with the same key, or Android refuses to install a new one over the old
 one. Make the key once (keep the file and passwords somewhere safe; losing them means
