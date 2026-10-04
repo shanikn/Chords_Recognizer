@@ -157,10 +157,10 @@ fun ChordChartTheme(content: @Composable () -> Unit) {
 @Composable
 private fun UploadIcon() {
     val ink = LocalContentColor.current
-    Canvas(Modifier.size(20.dp)) {
+    Canvas(Modifier.size(15.dp)) {
         val w = size.width
         val h = size.height
-        val stroke = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val stroke = Stroke(width = 1.9.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
         val arrow = Path().apply {
             moveTo(w * 0.5f, h * 0.68f); lineTo(w * 0.5f, h * 0.08f)
             moveTo(w * 0.22f, h * 0.34f); lineTo(w * 0.5f, h * 0.08f); lineTo(w * 0.78f, h * 0.34f)
@@ -274,7 +274,7 @@ private fun HomeScreen(
             Spacer(Modifier.height(16.dp))
             Button(onClick = onPick, modifier = Modifier.fillMaxWidth().height(56.dp)) {
                 UploadIcon()
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(8.dp))
                 Text("Upload a song", style = MaterialTheme.typography.titleMedium)
             }
             Spacer(Modifier.height(8.dp))
