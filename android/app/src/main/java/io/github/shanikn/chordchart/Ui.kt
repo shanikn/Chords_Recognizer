@@ -1,21 +1,14 @@
 package io.github.shanikn.chordchart
 
+import android.app.Activity
+import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Canvas
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -32,15 +25,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -51,8 +45,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -60,11 +56,24 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -72,18 +81,30 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
+import androidx.core.view.WindowCompat
 import java.text.DateFormat
 import java.util.Date
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlinx.coroutines.delay
 
-/** Cobalt blue throughout (not the phone's wallpaper colours), light and dark. */
+/** Cobalt blue accents on white (or near-black in dark mode), not the phone's wallpaper colours. */
 private val CobaltLight = lightColorScheme(
     primary = Color(0xFF0047AB), onPrimary = Color.White,
     primaryContainer = Color(0xFFD8E2FF), onPrimaryContainer = Color(0xFF001A42),
     secondary = Color(0xFF3F5F90), onSecondary = Color.White,
     secondaryContainer = Color(0xFFD6E3FF), onSecondaryContainer = Color(0xFF001B3D),
     tertiary = Color(0xFF00658E), onTertiary = Color.White,
-    surfaceVariant = Color(0xFFE0E2EC), outlineVariant = Color(0xFFC4C6D0),
+    background = Color.White, onBackground = Color(0xFF1A1C1E),
+    surface = Color.White, onSurface = Color(0xFF1A1C1E),
+    surfaceVariant = Color(0xFFE3E5EA), onSurfaceVariant = Color(0xFF44474E),
+    surfaceTint = Color(0xFF0047AB),
+    surfaceBright = Color.White, surfaceDim = Color(0xFFDADCE0),
+    surfaceContainerLowest = Color.White, surfaceContainerLow = Color(0xFFF7F8FA),
+    surfaceContainer = Color(0xFFF2F3F5), surfaceContainerHigh = Color(0xFFECEDF0),
+    surfaceContainerHighest = Color(0xFFE6E7EA),
+    outline = Color(0xFF74777F), outlineVariant = Color(0xFFC4C6CC),
 )
 private val CobaltDark = darkColorScheme(
     primary = Color(0xFFADC6FF), onPrimary = Color(0xFF002E6A),
@@ -91,13 +112,76 @@ private val CobaltDark = darkColorScheme(
     secondary = Color(0xFFA8C8FF), onSecondary = Color(0xFF07305F),
     secondaryContainer = Color(0xFF254777), onSecondaryContainer = Color(0xFFD6E3FF),
     tertiary = Color(0xFF7FD0FF), onTertiary = Color(0xFF00344B),
-    surfaceVariant = Color(0xFF44474F), outlineVariant = Color(0xFF44474F),
+    background = Color(0xFF121316), onBackground = Color(0xFFE3E3E6),
+    surface = Color(0xFF121316), onSurface = Color(0xFFE3E3E6),
+    surfaceVariant = Color(0xFF3A3C41), onSurfaceVariant = Color(0xFFC4C6CC),
+    surfaceTint = Color(0xFFADC6FF),
+    surfaceBright = Color(0xFF38393C), surfaceDim = Color(0xFF121316),
+    surfaceContainerLowest = Color(0xFF0D0E10), surfaceContainerLow = Color(0xFF1A1B1E),
+    surfaceContainer = Color(0xFF1E1F22), surfaceContainerHigh = Color(0xFF28292C),
+    surfaceContainerHighest = Color(0xFF333437),
+    outline = Color(0xFF8E9099), outlineVariant = Color(0xFF44474E),
 )
+
+/** Flips between light and dark; the choice is kept in the app's settings. */
+private val LocalToggleDark = staticCompositionLocalOf<() -> Unit> { {} }
 
 @Composable
 fun ChordChartTheme(content: @Composable () -> Unit) {
-    val colors = if (isSystemInDarkTheme()) CobaltDark else CobaltLight
-    MaterialTheme(colorScheme = colors) { Surface(Modifier.fillMaxSize(), content = content) }
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+    var dark by remember { mutableStateOf(prefs.getBoolean("dark", false)) }
+    val view = LocalView.current
+    SideEffect {
+        // dark status and navigation bar icons on white, light ones on dark
+        (context as? Activity)?.window?.let { window ->
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !dark
+                isAppearanceLightNavigationBars = !dark
+            }
+        }
+    }
+    val toggle = {
+        dark = !dark
+        prefs.edit().putBoolean("dark", dark).apply()
+    }
+    CompositionLocalProvider(LocalToggleDark provides toggle) {
+        MaterialTheme(colorScheme = if (dark) CobaltDark else CobaltLight) {
+            Surface(Modifier.fillMaxSize(), content = content)
+        }
+    }
+}
+
+/** A moon in light mode (tap for dark), a sun in dark mode (tap for light). */
+@Composable
+private fun DarkModeButton() {
+    val toggle = LocalToggleDark.current
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val ink = MaterialTheme.colorScheme.onSurface
+    val paper = MaterialTheme.colorScheme.surface
+    IconButton(onClick = toggle) {
+        Canvas(
+            Modifier.size(22.dp).semantics {
+                contentDescription = if (dark) "Switch to light mode" else "Switch to dark mode"
+            },
+        ) {
+            val r = size.minDimension / 2
+            if (dark) {
+                drawCircle(ink, radius = r * 0.42f)
+                for (i in 0 until 8) {
+                    val a = i * PI / 4
+                    val dir = Offset(cos(a).toFloat(), sin(a).toFloat())
+                    drawLine(
+                        ink, center + dir * (r * 0.62f), center + dir * (r * 0.95f),
+                        strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round,
+                    )
+                }
+            } else {
+                drawCircle(ink, radius = r * 0.8f)
+                drawCircle(paper, radius = r * 0.68f, center = center + Offset(r * 0.42f, -r * 0.32f))
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -129,6 +213,7 @@ fun App(
                     }
                 },
                 actions = {
+                    DarkModeButton()
                     if (screen == Screen.Home) TextButton(onClick = model::about) { Text("About") }
                 },
             )
