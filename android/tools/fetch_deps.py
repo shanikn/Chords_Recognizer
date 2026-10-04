@@ -99,10 +99,15 @@ def fetch(name: str, url: str) -> Path:
 
 
 def tree_hash(root: Path) -> str:
-    """SHA-256 over every file's relative path and SHA-256, in sorted order."""
+    """SHA-256 over every file's relative path and SHA-256, in sorted order.
+
+    Sorted as Windows sorts paths (per part, case-insensitively), where the pinned hashes
+    were made, so the same files give the same hash on Linux too.
+    """
     digest = hashlib.sha256()
-    for path in sorted(p for p in root.rglob("*") if p.is_file()):
-        rel = path.relative_to(root).as_posix()
+    files = [p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()]
+    for rel in sorted(files, key=lambda rel: rel.lower().split("/")):
+        path = root / rel
         digest.update(f"{rel}\0{hashlib.sha256(path.read_bytes()).hexdigest()}\n".encode())
     return digest.hexdigest()
 
