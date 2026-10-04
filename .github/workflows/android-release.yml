@@ -6,8 +6,10 @@
 # Signing: with the four CHORDCHART_* secrets set (see android/README.md), every build is
 # signed with your own key and installs over the previous one. Without them it is signed
 # with the runner's throwaway debug key: installable, but not over an earlier build.
-# Pull request builds never see the key: they run the PR's own Gradle scripts, which
-# could otherwise read it. They are always signed with the throwaway debug key.
+# Pull request builds never see the key: they run the PR's own Gradle scripts (and the
+# PR's copy of this file), which could otherwise read it. The secrets live in the
+# "release" environment, which only main and v* tags may use, and PR runs don't enter it;
+# they are always signed with the throwaway debug key.
 name: Android release APK
 
 on:
@@ -30,6 +32,7 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    environment: ${{ github.event_name != 'pull_request' && 'release' || '' }}
     steps:
       - uses: actions/checkout@v5
 

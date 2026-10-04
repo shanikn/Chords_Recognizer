@@ -44,7 +44,10 @@ For local release builds, android/keystore.properties (git-ignored; path relativ
     keyAlias=chordchart
     keyPassword=...
 
-For GitHub, repository Settings -> Secrets and variables -> Actions, four secrets:
+For GitHub, repository Settings -> Environments -> New environment "release"; under
+Deployment branches and tags choose Selected, add the branch main and the tag pattern v*;
+then add four environment secrets there (not repository secrets, which a pull request's
+own workflow could read):
     CHORDCHART_KEYSTORE_BASE64    the .jks file, base64 (PowerShell:
                                   [Convert]::ToBase64String([IO.File]::ReadAllBytes("chordchart-release.jks")) | Set-Clipboard)
     CHORDCHART_KEYSTORE_PASSWORD  CHORDCHART_KEY_ALIAS  CHORDCHART_KEY_PASSWORD
