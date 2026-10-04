@@ -132,8 +132,8 @@ jobs:
             echo "::error::Run the workflow on main to publish a release."; exit 1
           fi
           # an existing tag must name this build's commit, or the APK wouldn't match its source
-          tagged=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs/tags/$RELEASE_TAG" --jq .sha 2>/dev/null || true)
-          if [ -n "$tagged" ] && [ "$tagged" != "$GITHUB_SHA" ]; then
+          # (gh api prints GitHub's error JSON on stdout for a missing tag, so test its exit status)
+          if tagged=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs/tags/$RELEASE_TAG" --jq .sha 2>/dev/null) && [ "$tagged" != "$GITHUB_SHA" ]; then
             echo "::error::$RELEASE_TAG already exists, on $tagged, not this build's $GITHUB_SHA. Pick a new tag."; exit 1
           fi
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
