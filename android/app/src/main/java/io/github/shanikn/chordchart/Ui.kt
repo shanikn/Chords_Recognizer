@@ -212,6 +212,7 @@ fun App(
     screen: Screen,
     entries: List<History.Entry>,
     onPick: () -> Unit,
+    onListen: () -> Unit,
     model: AppViewModel,
 ) {
     Scaffold(
@@ -224,13 +225,14 @@ fun App(
                             is Screen.Analyzing -> screen.title
                             is Screen.Failed -> screen.title
                             Screen.About -> "About"
+                            is Screen.Listening -> "Listening"
                             Screen.Home -> "Chord Chart"
                         },
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                 },
                 navigationIcon = {
-                    if (screen != Screen.Home && screen !is Screen.Analyzing) {
+                    if (screen != Screen.Home && screen !is Screen.Analyzing && screen !is Screen.Listening) {
                         TextButton(onClick = model::home) { Text("‹ Back") }
                     }
                 },
@@ -243,7 +245,8 @@ fun App(
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
             when (screen) {
-                Screen.Home -> HomeScreen(entries, onPick, model::openLink, model::show, model::delete)
+                Screen.Home -> HomeScreen(entries, onPick, onListen, model::openLink, model::show, model::delete)
+                is Screen.Listening -> ListeningScreen(screen, model)
                 is Screen.Analyzing -> AnalyzingScreen(screen, model::cancel)
                 is Screen.Chart -> ChartScreen(screen.entry)
                 is Screen.Failed -> FailedScreen(screen, onPick)
@@ -251,7 +254,13 @@ fun App(
             }
         }
     }
-    if (screen != Screen.Home) BackHandler { if (screen is Screen.Analyzing) model.cancel() else model.home() }
+    if (screen != Screen.Home) BackHandler {
+        when (screen) {
+            is Screen.Analyzing -> model.cancel()
+            is Screen.Listening -> model.cancelListening()
+            else -> model.home()
+        }
+    }
 }
 
 /** A YouTube or Spotify link to chart (the sideload build only). */
@@ -296,6 +305,7 @@ private fun LinkField(onLink: (String) -> Unit) {
 private fun HomeScreen(
     entries: List<History.Entry>,
     onPick: () -> Unit,
+    onListen: () -> Unit,
     onLink: (String) -> Unit,
     onOpen: (History.Entry) -> Unit,
     onDelete: (History.Entry) -> Unit,
@@ -316,6 +326,15 @@ private fun HomeScreen(
             Spacer(Modifier.height(8.dp))
             Text(
                 "Or share an audio or video file to Chord Chart from another app.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(16.dp))
+            OutlinedButton(onClick = onListen, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Listen") }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Play a song out loud, from Spotify, YouTube, the radio or a guitar, and Chord Chart " +
+                    "charts what it hears.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -363,6 +382,60 @@ private val STAGE_WEIGHT = mapOf(
     Stage.Find to 0.05, Stage.Download to 0.15, Stage.Decode to 0.10, Stage.Beats to 0.60, Stage.Chords to 0.20,
     Stage.Key to 0.04, Stage.Bars to 0.03, Stage.Chart to 0.03,
 )
+
+@Composable
+private fun ListeningScreen(state: Screen.Listening, model: AppViewModel) {
+    // The screen stays on: once it locks, Android stops giving the app the microphone.
+    val view = LocalView.current
+    DisposableEffect(Unit) {
+        view.keepScreenOn = true
+        onDispose { view.keepScreenOn = false }
+    }
+    var level by remember { mutableFloatStateOf(0f) }
+    var seconds by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(state) {
+        while (true) {
+            val r = model.recorder ?: break
+            level = r.level
+            seconds = r.samples / Recorder.RATE
+            if (r.finished) {  // the length limit (or the microphone failed)
+                model.stopListening()
+                break
+            }
+            delay(100)
+        }
+    }
+    val shown by animateFloatAsState(level, tween(durationMillis = 100), label = "level")
+    Column(Modifier.fillMaxSize().padding(24.dp)) {
+        Text("Listening…", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Play the song out loud near the phone, from the start if you can. To play it on this " +
+                "phone, start it in Spotify or YouTube and come back here: Chord Chart only hears " +
+                "while it's on screen, and skips the quiet bits. Tap Stop when the song ends.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(24.dp))
+        ProgressBar(shown)
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth()) {
+            Text(formatDuration(seconds.toDouble()), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.weight(1f))
+            Text(
+                "up to ${Recorder.MAX_SECONDS / 60} minutes",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.weight(1f))
+        Button(onClick = model::stopListening, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+            Text("Stop and chart it", style = MaterialTheme.typography.titleMedium)
+        }
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(onClick = model::cancelListening, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+    }
+}
 
 @Composable
 private fun AnalyzingScreen(state: Screen.Analyzing, onCancel: () -> Unit) {
@@ -609,13 +682,15 @@ private fun AboutScreen() {
         Spacer(Modifier.height(8.dp))
         Text(
             if (BuildConfig.LINKS) {
-                "Songs are analysed on the phone and never leave it. The internet is used only for " +
+                "Songs are analysed on the phone and never leave it, and what Listen records is " +
+                    "used only for its chart, never kept. The internet is used only for " +
                     "YouTube and Spotify links: to read the link and download the song's audio (from " +
                     "YouTube; for a Spotify link, the same recording found on YouTube, since Spotify's " +
                     "own audio is never used). Charts are kept on the phone until you delete them."
             } else {
                 "Songs are analysed on the phone and never leave it: Chord Chart doesn't use the " +
-                    "internet at all. Charts are kept on the phone until you delete them."
+                    "internet at all. What Listen records is used only for its chart, never kept. " +
+                    "Charts are kept on the phone until you delete them."
             },
             style = MaterialTheme.typography.bodyMedium,
         )

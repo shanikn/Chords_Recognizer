@@ -19,6 +19,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.MessageDigest
+import java.text.DateFormat
+import java.util.Date
 
 /** The stages shown while a song is analysed, in the order they finish. */
 enum class Stage(val label: String) {
@@ -43,6 +45,8 @@ sealed interface Screen {
     data class Chart(val entry: History.Entry, val fromHistory: Boolean) : Screen
     data class Failed(val title: String, val message: String) : Screen
     data object About : Screen
+    /** Recording a song played out loud (Listen). */
+    data class Listening(val startedAt: Long) : Screen
 }
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
@@ -67,6 +71,46 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val id = withContext(Dispatchers.IO) { hash(uri) }
             Source(id, title, fileName) { progress -> AudioDecoder.decode(app, uri, progress) }
         }
+    }
+
+    /** The recording in progress, while the screen is Listening. */
+    var recorder: Recorder? = null
+        private set
+
+    /** Listen: record a song played out loud. Needs the RECORD_AUDIO permission. */
+    fun listen() {
+        job?.cancel()
+        recorder?.cancel()
+        val r = Recorder(getApplication())
+        try {
+            r.start()
+        } catch (e: Recorder.Failed) {
+            _screen.value = Screen.Failed("Listen", e.message!!)
+            return
+        }
+        recorder = r
+        _screen.value = Screen.Listening(System.currentTimeMillis())
+    }
+
+    /** Stops listening and charts what was heard. */
+    fun stopListening() {
+        val r = recorder ?: return
+        recorder = null
+        val title = "Recording, " + DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date())
+        start(title, emptyList()) {
+            val pcm = withContext(Dispatchers.IO) { r.stop() }
+            Source("mic-" + hash(pcm), title, "Recorded with the microphone") { pcm }
+        }
+    }
+
+    fun failed(title: String, message: String) {
+        _screen.value = Screen.Failed(title, message)
+    }
+
+    fun cancelListening() {
+        recorder?.cancel()
+        recorder = null
+        _screen.value = Screen.Home
     }
 
     /** A YouTube or Spotify link, typed or shared from another app. */
@@ -193,6 +237,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 _screen.value = Screen.Failed(title, e.message ?: "the analysis failed")
             } catch (e: LinkSource.LinkError) {
                 _screen.value = Screen.Failed(title, e.message!!)
+            } catch (e: Recorder.Failed) {
+                _screen.value = Screen.Failed(title, e.message!!)
             } catch (e: AudioDecoder.Unsupported) {
                 _screen.value = Screen.Failed(title, e.message ?: "this file can't be read")
             } catch (e: SecurityException) {
@@ -226,6 +272,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun home() {
+        recorder?.cancel()
+        recorder = null
         _screen.value = Screen.Home
     }
 
@@ -257,7 +305,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return digest.digest().take(16).joinToString("") { "%02x".format(it) }
     }
 
+    private fun hash(pcm: ShortArray): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val bytes = java.nio.ByteBuffer.allocate(pcm.size * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        bytes.asShortBuffer().put(pcm)
+        digest.update(bytes)
+        return digest.digest().take(16).joinToString("") { "%02x".format(it) }
+    }
+
     override fun onCleared() {
+        recorder?.cancel()
         if (analyzer.isCompleted && !analyzer.isCancelled) runCatching { analyzer.getCompleted().close() }
     }
 }

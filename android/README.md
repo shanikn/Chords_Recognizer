@@ -2,12 +2,13 @@ ChordChart for Android
 ======================
 
 A standalone Android app that runs ChordChart's whole chord analysis on the phone (no
-PC, server or Python). Songs come from the phone, or from a YouTube or Spotify link (the
+PC, server or Python). Songs come from the phone, from the microphone (Listen), or from a YouTube or Spotify link (the
 audio is downloaded with NewPipe Extractor; a Spotify track is matched to the same
 recording on YouTube, as on the desktop). Licensed GPL-3.0-or-later (LICENSE), because
 of NewPipe Extractor. Two builds: "full", the sideload APK with links, and "play", for
-Google Play, which doesn't allow YouTube downloads: songs from the phone only, no
-internet permission (docs/play/README.md). Work in progress, in phases; see docs/PHASE0.md for the stack,
+Google Play, which doesn't allow YouTube downloads: no links and no internet
+permission (docs/play/README.md). Both can also Listen: record a song played out loud
+through the microphone and chart it. Work in progress, in phases; see docs/PHASE0.md for the stack,
 the verified ONNX models, the plan for exact reimplementation, licenses and estimates.
 
     core/     the analysis in platform-independent C++ (also builds on the PC; no Android

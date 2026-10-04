@@ -3,7 +3,9 @@
 The Play build is the `play` flavor (`./gradlew bundlePlayRelease`). It is the sideload
 app without YouTube and Spotify links: Google Play doesn't allow apps that download
 YouTube's audio, so the Play build has no NewPipe Extractor, no link field, and no
-internet permission. Songs come from the phone (Upload a song, or share/open a file).
+internet permission. Songs come from the phone (Upload a song, or share/open a file), or
+from the microphone (Listen: play the song out loud, from Spotify, YouTube or anything,
+and the app records and charts it).
 The sideload APK (`full` flavor, GitHub releases) keeps the links.
 
 Files here:
@@ -62,13 +64,15 @@ Files here:
     Chord Chart listens to a song on your phone and writes out its chord chart: the
     chords bar by bar, the beats, the time signature, the tempo and the key.
 
-    Pick an audio or video file from your phone, or share one to Chord Chart from
-    another app. A few moments later you get a clean chart to play along with.
+    Pick an audio or video file from your phone, share one to Chord Chart from
+    another app, or tap Listen and play the song out loud, from any app, speaker or
+    instrument. A few moments later you get a clean chart to play along with.
 
     • Chords for every bar, with chord changes inside a bar
     • Key, tempo (BPM), meter and length
+    • Listen: charts a song it hears through the microphone
     • Works completely offline: songs never leave your phone, and the app has no
-      internet access at all
+      internet access at all. Recordings are analysed and discarded, never stored
     • No account, no ads, no tracking
     • Your charts are saved on the phone so you can open them again
     • Reads MP3, AAC/M4A, WAV, FLAC, Ogg and Opus, and the audio of video files
@@ -96,6 +100,9 @@ The ones in docs/screenshots are from an older version.
 - **Privacy policy:** the URL above.
 - **App access:** All functionality is available without special access.
 - **Ads:** No, the app does not contain ads.
+- **Permissions:** the app asks for the microphone (Listen). Play may ask why in the
+  "Sensitive permissions" part of App content: "Records a song the user plays out loud
+  to work out its chords; processed on the device only and never stored."
 - **Content rating** (IARC questionnaire): category *Utility, Productivity,
   Communication, or Other*; answer No to violence, sexuality, language, controlled
   substances, gambling, user interaction/sharing, location sharing, digital purchases.
@@ -108,7 +115,8 @@ The ones in docs/screenshots are from an older version.
     "No data collected" and "No data shared with third parties".
   - Why that's accurate: the Play build has no internet permission, so nothing can
     leave the phone; charts are stored only on the device, and Play's definition of
-    "collect" covers data sent off the device.
+    "collect" covers data sent off the device. The microphone recording (Listen) is
+    processed on the phone and discarded, which Play also doesn't count as collected.
 - **Government apps / Financial features / Health:** No / none / none.
 - **News app:** No.
 

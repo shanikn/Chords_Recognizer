@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Listen: a song played out loud, recorded and analysed on the phone (never stored or sent) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- ...but phones and tablets without one can still install it, for their own files -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <!-- No internet permission here: songs are analysed offline. The sideload build adds it
          for YouTube and Spotify links (src/full/AndroidManifest.xml). -->
     <application
